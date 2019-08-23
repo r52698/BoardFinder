@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.*
 
@@ -21,7 +22,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var lastLocation: Location
     private var requestingLocationUpdates: Boolean = false
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_maps)
@@ -36,6 +37,30 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1
     }
 
+    fun work() {
+        if (ActivityCompat.checkSelfPermission(this,
+                android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            // 1
+            map.isMyLocationEnabled = true
+
+            // 2
+            fusedLocationClient.lastLocation.addOnSuccessListener(this) { location ->
+                // Got last known location. In some rare situations this can be null.
+                // 3
+                if (location != null) {
+                    lastLocation = location
+                    val currentLatLng = LatLng(location.latitude, location.longitude)
+                    val lat = currentLatLng.latitude
+                    val lon = currentLatLng.longitude
+                    map.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 12f))
+                    Toast.makeText(this, "lat: $lat, lon: $lon", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(this, "location is null", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
     override fun onRequestPermissionsResult(requestCode: Int,
                                             permissions: Array<String>, grantResults: IntArray) {
         when (requestCode) {
@@ -44,27 +69,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
                     // permission was granted, yay! Do the
                     // contacts-related task you need to do.
-                    if (ActivityCompat.checkSelfPermission(this,
-                            android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                        // 1
-                        map.isMyLocationEnabled = true
-
-                        // 2
-                        fusedLocationClient.lastLocation.addOnSuccessListener(this) { location ->
-                            // Got last known location. In some rare situations this can be null.
-                            // 3
-                            if (location != null) {
-                                lastLocation = location
-                                val currentLatLng = LatLng(location.latitude, location.longitude)
-                                val lat = currentLatLng.latitude
-                                val lon = currentLatLng.longitude
-                                map.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 12f))
-                                Toast.makeText(this, "lat: $lat, lon: $lon", Toast.LENGTH_LONG).show()
-                            } else {
-                                Toast.makeText(this, "location is null", Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
+                    work()
                 } else {
                     // permission denied, boo! Disable the
                     // functionality that depends on this permission.
@@ -103,5 +108,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onMapReady(googleMap: GoogleMap) {
         map = googleMap
         setUpMap()
+        work()
     }
+
+//    private fun startLocationUpdates() {
+//        var locationRequest : LocationRequest
+//        fusedLocationClient.requestLocationUpdates(locationRequest,
+//            locationCallback,
+//            null /* Looper */)
+//    }
 }
