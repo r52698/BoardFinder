@@ -21,8 +21,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var lastLocation: Location
     private var requestingLocationUpdates: Boolean = false
-
-
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_maps)
@@ -88,13 +87,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 this,
                 arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION), LOCATION_PERMISSION_REQUEST_CODE
             )
-            //return
         }
-
-        val grantedArray : IntArray = intArrayOf(PackageManager.PERMISSION_GRANTED)
-
-        onRequestPermissionsResult(LOCATION_PERMISSION_REQUEST_CODE, arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION),
-            grantedArray)
     }
 
 
@@ -109,50 +102,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
      */
     override fun onMapReady(googleMap: GoogleMap) {
         map = googleMap
-
-        // Add a marker in Sydney and move the camera
-//        val israel = LatLng(32.0, 34.0)
-//
-//        map.addMarker(MarkerOptions().position(israel).title("Marker in Israel"))
-//        map.moveCamera(CameraUpdateFactory.newLatLng(israel))
-
-//        if (ContextCompat.checkSelfPermission(this,
-//                Manifest.permission.ACCESS_FINE_LOCATION)
-//            != PackageManager.PERMISSION_GRANTED) {
-//
-//            // Permission is not granted
-//            // Should we show an explanation?
-//            if (ActivityCompat.shouldShowRequestPermissionRationale(this,
-//                    Manifest.permission.ACCESS_FINE_LOCATION)) {
-//                // Show an explanation to the user *asynchronously* -- don't block
-//                // this thread waiting for the user's response! After the user
-//                // sees the explanation, try again to request the permission.
-//            } else {
-//                // No explanation needed, we can request the permission.
-//                ActivityCompat.requestPermissions(this,
-//                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-//                    MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION)
-//
-//                // MY_PERMISSIONS_REQUEST_READ_CONTACTS is an
-//                // app-defined int constant. The callback method gets the
-//                // result of the request.
-//            }
-//        } else {
-//            // Permission has already been granted
-//        }
-
-//        if (ContextCompat.checkSelfPermission(this,
-//                android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-//            || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
-//            == PackageManager.PERMISSION_GRANTED) {
-//
-//            //map.setMyLocationEnabled(true)
-//
-//            println("worked")
-//        } else {
-//            println("Didn't work")
-//        }
-        //val currentLocation: FusedLocationProviderClient
         setUpMap()
     }
 }
