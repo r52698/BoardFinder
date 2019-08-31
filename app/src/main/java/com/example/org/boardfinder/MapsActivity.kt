@@ -106,9 +106,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     // 3
     public override fun onResume() {
         super.onResume()
-        if (!locationUpdateState) {
+        println("onResume")
+        //if (!locationUpdateState) {
+            println("strtLocationUpdates")
             startLocationUpdates()
-        }
+        //}
     }
 
 
