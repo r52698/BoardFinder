@@ -124,47 +124,59 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mapFragment.getMapAsync(this)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
+        var firstTime = true
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(p0: LocationResult) {
                 super.onLocationResult(p0)
 
+                var prevLocation = p0.lastLocation
+                if (!firstTime) prevLocation = lastLocation
+                firstTime = false
                 lastLocation = p0.lastLocation
-                placeMarkerOnMap(LatLng(lastLocation.latitude, lastLocation.longitude))
+                placeMarkerOnMap(LatLng(prevLocation.latitude, prevLocation.longitude),
+                    LatLng(lastLocation.latitude, lastLocation.longitude),
+                    lastLocation.speed)
+                map.animateCamera(CameraUpdateFactory.newLatLng(LatLng(lastLocation.latitude, lastLocation.longitude)))
             }
         }
         createLocationRequest()
     }
 
-    private fun placeMarkerOnMap(location: LatLng) {
-        // 1
-        val markerOptions = MarkerOptions().position(location)
-        // 2
-        map.addMarker(markerOptions)
-//        val polyline1 = map.addPolyline(
-//            PolylineOptions()
-//                .clickable(true)
-//                .add(LatLng(fromLocation.latitude, fromLocation.longitude),
-        println("Placing a marker at lat ${location.latitude} lon ${location.longitude}")
+    private fun placeMarkerOnMap(fromLocation: LatLng, toLocation: LatLng, speed: Float) {
+//        // 1
+//        val markerOptions = MarkerOptions().position(location)
+//        // 2
+//        map.addMarker(markerOptions)
+        val speedKmh = speed * 3.6
+        val speedToDisplay = (speedKmh * 100).toInt() / 100.0
+        val polyline1 = map.addPolyline(
+            PolylineOptions().color(getColor(speedKmh).toInt())
+                .clickable(true)
+                .add(LatLng(fromLocation.latitude, fromLocation.longitude),
+                    LatLng(toLocation.latitude, toLocation.longitude))
+        )
+        println("Placing a marker at lat ${toLocation.latitude} lon ${toLocation.longitude}")
+        Toast.makeText(this, "$speedToDisplay km/h", Toast.LENGTH_LONG).show()
     }
 
-//    fun getColor(speed: Double) : Long {
-//        // speed and speeds are in km/h
-//        val speeds = listOf(1, 2, 4, 7, 10, 15, 20, 30, 1000)
-//        val colors = listOf (
-//            COLOR_LIGHT_GREEN_ARGB,
-//            COLOR_GREEN_ARGB,
-//            COLOR_DARK_GREEN_ARGB,
-//            COLOR_YELLOW_ARGB,
-//            COLOR_YELLOW_ORANGE_ARGB,
-//            COLOR_ORANGE_ARGB,
-//            COLOR_RED_ARGB,
-//            COLOR_DARK_RED_ARGB,
-//            COLOR_MAGENTA_ARGB
-//        )
-//        var i = speeds.count() - 2
-//        while (i>=0 && speed < speeds[i]) i--
-//        return colors[i + 1]
-//    }
+    fun getColor(speed: Double) : Long {
+        // speed and speeds are in km/h
+        val speeds = listOf(1, 2, 4, 7, 10, 15, 20, 30, 1000)
+        val colors = listOf (
+            COLOR_LIGHT_GREEN_ARGB,
+            COLOR_GREEN_ARGB,
+            COLOR_DARK_GREEN_ARGB,
+            COLOR_YELLOW_ARGB,
+            COLOR_YELLOW_ORANGE_ARGB,
+            COLOR_ORANGE_ARGB,
+            COLOR_RED_ARGB,
+            COLOR_DARK_RED_ARGB,
+            COLOR_MAGENTA_ARGB
+        )
+        var i = speeds.count() - 2
+        while (i>=0 && speed < speeds[i]) i--
+        return colors[i + 1]
+    }
 
     fun work() {
         if (ActivityCompat.checkSelfPermission(this,
