@@ -31,8 +31,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var locationRequest: LocationRequest
     private var locationUpdateState = false
 
-    private lateinit var previousLocation : Location
-
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1
         private const val REQUEST_CHECK_SETTINGS = 2
@@ -128,21 +126,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             override fun onLocationResult(p0: LocationResult) {
                 super.onLocationResult(p0)
 
-                previousLocation = lastLocation
-
                 lastLocation = p0.lastLocation
                 placeMarkerOnMap(LatLng(lastLocation.latitude, lastLocation.longitude))
-
-                val polyline1 = map.addPolyline(
-                    PolylineOptions()
-                        .clickable(true)
-                        .add(
-                            LatLng(previousLocation.latitude, previousLocation.longitude),
-                            LatLng(lastLocation.latitude, lastLocation.longitude)
-                        )
-                )
-                var speed = lastLocation.speed;
-                println("Speed is $speed m/s")
             }
         }
         createLocationRequest()
@@ -153,10 +138,33 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val markerOptions = MarkerOptions().position(location)
         // 2
         map.addMarker(markerOptions)
+//        val polyline1 = map.addPolyline(
+//            PolylineOptions()
+//                .clickable(true)
+//                .add(LatLng(fromLocation.latitude, fromLocation.longitude),
+        println("Placing a marker at lat ${location.latitude} lon ${location.longitude}")
     }
 
+//    fun getColor(speed: Double) : Long {
+//        // speed and speeds are in km/h
+//        val speeds = listOf(1, 2, 4, 7, 10, 15, 20, 30, 1000)
+//        val colors = listOf (
+//            COLOR_LIGHT_GREEN_ARGB,
+//            COLOR_GREEN_ARGB,
+//            COLOR_DARK_GREEN_ARGB,
+//            COLOR_YELLOW_ARGB,
+//            COLOR_YELLOW_ORANGE_ARGB,
+//            COLOR_ORANGE_ARGB,
+//            COLOR_RED_ARGB,
+//            COLOR_DARK_RED_ARGB,
+//            COLOR_MAGENTA_ARGB
+//        )
+//        var i = speeds.count() - 2
+//        while (i>=0 && speed < speeds[i]) i--
+//        return colors[i + 1]
+//    }
 
-    private fun work() {
+    fun work() {
         if (ActivityCompat.checkSelfPermission(this,
                 android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             // 1
