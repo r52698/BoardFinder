@@ -16,24 +16,25 @@
             android:textSize="30dp"
             android:text="Not Started"
             />
+
     <Button
             android:id="@+id/btn_start_tracking"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Start tracking"
-            android:enabled="false"
             android:layout_gravity="center"
             android:layout_marginTop="130dp"
-            android:textSize="20dp"
-            />
+            android:enabled="false"
+            android:text="Start tracking"
+            android:textSize="20dp" />
+
     <Button
             android:id="@+id/btn_stop_tracking"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Stop tracking"
-            android:enabled="false"
             android:layout_gravity="center"
             android:layout_marginTop="170dp"
-            android:textSize="15dp"
-            />
+            android:enabled="false"
+            android:onClick="stopLocationButtonClick"
+            android:text="Stop tracking"
+            android:textSize="15dp" />
 </fragment>
