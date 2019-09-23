@@ -2,12 +2,17 @@ package com.example.org.boardfinder
 
 import android.Manifest
 import android.app.Activity
-import android.content.Intent
-import android.content.IntentSender
+import android.content.*
 import android.content.pm.PackageManager
 import android.location.Location
+import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.IBinder
+import android.provider.Settings
+import android.webkit.PermissionRequest
+import android.widget.Button
+import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -18,6 +23,12 @@ import com.google.android.gms.maps.*
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.PolylineOptions
+import com.karumi.dexter.Dexter
+import com.karumi.dexter.PermissionToken
+import com.karumi.dexter.listener.PermissionDeniedResponse
+import com.karumi.dexter.listener.PermissionGrantedResponse
+import com.karumi.dexter.listener.single.PermissionListener
+import kotlinx.android.synthetic.main.activity_maps.*
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
@@ -30,6 +41,18 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private lateinit var locationRequest: LocationRequest
     private var locationUpdateState = false
+
+//    @BindView(R.id.btn_start_tracking)
+//    internal var btnStartTracking: Button? = null
+//
+//    @BindView(R.id.btn_stop_tracking)
+//    internal var btnStopTracking: Button? = null
+//
+//    @BindView(R.id.txt_status)
+//    internal var txtStatus: TextView? = null
+
+    var gpsService: BackgroundService? = null
+    var mTracking = false
 
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1
@@ -124,6 +147,15 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mapFragment.getMapAsync(this)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
+
+        //ButterKnife.bind(this)
+
+        val intent = Intent(this.application, BackgroundService::class.java)
+        this.application.startService(intent)
+//        this.getApplication().startForegroundService(intent);
+        this.application.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+
+
         var firstTime = true
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(p0: LocationResult) {
@@ -140,6 +172,70 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             }
         }
         createLocationRequest()
+    }
+
+    fun startLocationButtonClick() {
+        Dexter.withActivity(this)
+            .withPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+            .withListener(object : PermissionListener() {
+                fun onPermissionGranted(response: PermissionGrantedResponse) {
+                    gpsService.startTracking()
+                    mTracking = true
+                    toggleButtons()
+                }
+
+                fun onPermissionDenied(response: PermissionDeniedResponse) {
+                    if (response.isPermanentlyDenied()) {
+                        openSettings()
+                    }
+                }
+
+                fun onPermissionRationaleShouldBeShown(
+                    permission: PermissionRequest,
+                    token: PermissionToken
+                ) {
+                    token.continuePermissionRequest()
+                }
+            }).check()
+    }
+
+    fun stopLocationButtonClick() {
+        mTracking = false
+        gpsService.stopTracking()
+        toggleButtons()
+    }
+
+    private fun toggleButtons() {
+        btn_start_tracking.setEnabled(!mTracking)
+        btn_start_tracking.setEnabled(mTracking)
+        txt_status.setText(if (mTracking) "TRACKING" else "GPS Ready")
+    }
+
+    private fun openSettings() {
+        val intent = Intent()
+        intent.action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+        val uri = Uri.fromParts("package", BuildConfig.APPLICATION_ID, null)
+        intent.data = uri
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        startActivity(intent)
+    }
+
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(className: ComponentName, service: IBinder) {
+            val name = className.className
+            if (name.endsWith("BackgroundService")) {
+                gpsService = (service as BackgroundService.LocationServiceBinder).
+                btn_start_tracking.setEnabled(true)
+                txt_status.setText("GPS Ready")
+            }
+        }
+
+        override fun onServiceDisconnected(className: ComponentName) {
+            if (className.className == "BackgroundService") {
+                gpsService = null
+            }
+        }
     }
 
     private fun placeMarkerOnMap(fromLocation: LatLng, toLocation: LatLng, speed: Float) {
