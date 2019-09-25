@@ -20,6 +20,7 @@ import android.util.TimeFormatException
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.example.org.boardfinder.MapsActivity.Companion.stopClicked
 
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.api.GoogleApiClient
@@ -55,8 +56,10 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                     //Send result to activities
                     sendMessageToUI(mLastLocation!!.latitude.toString(), mLastLocation!!.longitude.toString())
 
-                    locations.add(mLastLocation!!)
-                    timeStamps.add(Timestamp(System.currentTimeMillis()).toString())
+                    if (!stopClicked) {
+                        locations.add(mLastLocation!!)
+                        timeStamps.add(Timestamp(System.currentTimeMillis()).toString())
+                    }
                 }
             }
         }

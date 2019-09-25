@@ -49,7 +49,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var averageSpeed = 0.0
 
     private var mapReady = false
-    private var stopClicked = false
 
     /**
      * Return the availability of GooglePlayServices
@@ -80,7 +79,22 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
          * Code used in requesting runtime permissions.
          */
         private val REQUEST_PERMISSIONS_REQUEST_CODE = 34
+
+        var stopClicked = false
     }
+
+    override fun onSaveInstanceState(outState: Bundle?) {
+        super.onSaveInstanceState(outState)
+        outState?.putString(EXTRA_TEXT, msgView.text.toString())
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle?) {
+        super.onRestoreInstanceState(savedInstanceState)
+        if (savedInstanceState != null) {
+            msgView.text = savedInstanceState.getString(EXTRA_TEXT)
+        }
+    }
+
 
     private fun startLocationUpdates() {
         //1
@@ -99,9 +113,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // 1
         locationRequest = LocationRequest()
         // 2
-        locationRequest.interval = 10000
+        locationRequest.interval = 50000
         // 3
-        locationRequest.fastestInterval = 1000
+        locationRequest.fastestInterval = 5000
         locationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
 
         val builder = LocationSettingsRequest.Builder()
@@ -185,9 +199,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val timeHours = time / 3600.0
         var timeString = ""
         if (timeHours >= 1) timeString += timeHours.toInt().toString() + ":"
-        var timeMinutesString = (time.toInt() % 3600).toString()
+        val timeMinutesString = ((time.toInt() % 3600) / 60).toString()
         if (timeMinutesString.length == 1 && timeString.isEmpty()) timeString += "0"
-        timeString += (time / 60.0).toInt().toString() + ":"
+        timeString += "$timeMinutesString:"
         val secondsString = (time.toInt() % 60).toString()
         if (secondsString.length == 1) timeString += "0"
         timeString += secondsString
