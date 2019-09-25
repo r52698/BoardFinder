@@ -16,4 +16,13 @@
             android:textColor="#000"
             android:text="@string/msg_location_service_not_started" />
 
+    <Button
+            android:id="@+id/btn_stop_tracking"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_marginTop="30dp"
+            android:enabled="true"
+            android:text="@string/finish"
+            android:textSize="20sp" />
 </fragment>

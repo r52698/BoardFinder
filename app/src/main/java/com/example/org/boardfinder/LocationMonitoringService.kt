@@ -3,11 +3,9 @@ package com.example.org.boardfinder
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
@@ -18,6 +16,7 @@ import android.os.Looper
 //import android.support.v4.app.NotificationCompat
 //import android.support.v4.content.LocalBroadcastManager
 import android.util.Log
+import android.util.TimeFormatException
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
@@ -29,11 +28,11 @@ import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
+import java.sql.Timestamp
+
 //import com.puertosoft.eder.locationtrackerkotlin.R
 //
 //import com.puertosoft.eder.locationtrackerkotlin.settings.Constants
-
-import java.util.List;
 
 class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener{
     internal lateinit  var mLocationClient: GoogleApiClient
@@ -55,6 +54,9 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
 
                     //Send result to activities
                     sendMessageToUI(mLastLocation!!.latitude.toString(), mLastLocation!!.longitude.toString())
+
+                    locations.add(mLastLocation!!)
+                    timeStamps.add(Timestamp(System.currentTimeMillis()).toString())
                 }
             }
         }
@@ -177,5 +179,9 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
         val ACTION_LOCATION_BROADCAST = LocationMonitoringService::class.java!!.getName() + "LocationBroadcast"
         val EXTRA_LATITUDE = "extra_latitude"
         val EXTRA_LONGITUDE = "extra_longitude"
+
+        var locations = mutableListOf<Location>()
+        var timeStamps = mutableListOf<String>()
+        val serviceStartTime = System.currentTimeMillis()
     }
 }

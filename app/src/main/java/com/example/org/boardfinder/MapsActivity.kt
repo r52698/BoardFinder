@@ -6,18 +6,16 @@ import android.content.*
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.ConnectivityManager
-import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.example.org.boardfinder.LocationMonitoringService.Companion.serviceStartTime
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.common.api.ResolvableApiException
@@ -25,9 +23,12 @@ import com.google.android.gms.location.*
 import com.google.android.gms.maps.*
 
 import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.PolylineOptions
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.android.synthetic.main.activity_maps.*
+import java.text.ParseException
+import java.text.SimpleDateFormat
+import java.util.*
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
@@ -43,6 +44,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private var mAlreadyStartedService = false
     private var mMsgView: TextView? = null
+
+    private var distance = 0.0
+    private var averageSpeed = 0.0
+
+    private var mapReady = false
+    private var stopClicked = false
 
     /**
      * Return the availability of GooglePlayServices
@@ -94,7 +101,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // 2
         locationRequest.interval = 10000
         // 3
-        locationRequest.fastestInterval = 5000
+        locationRequest.fastestInterval = 1000
         locationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
 
         val builder = LocationSettingsRequest.Builder()
@@ -147,11 +154,65 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         super.onResume()
         println("onResume")
         //if (!locationUpdateState) {
-            println("strtLocationUpdates")
+            println("startLocationUpdates")
             startLocationUpdates()
         //}
-        startStep1()
+        if (!stopClicked) {
+            startStep1()
+            distance = 0.0
+            averageSpeed = 0.0
+            lateinit var previousLocation: Location
+            var firstLocation = true
+            Toast.makeText(
+                this,
+                "${LocationMonitoringService.locations.count()} locations",
+                Toast.LENGTH_LONG
+            ).show()
+            showTrack(true)
+            val elapsedTimeSeconds = (System.currentTimeMillis() - serviceStartTime) / 1000.0
+            showResults(distance, elapsedTimeSeconds)
+            //Toast.makeText(this, "Distance = $distance", Toast.LENGTH_LONG).show()
+
+            for (timeStamp in LocationMonitoringService.timeStamps) {
+
+                val time = returnDateString(timeStamp)
+                println("Time=$time")
+            }
+        }
     }
+
+    fun showResults(distance: Double, time: Double) {
+        val timeHours = time / 3600.0
+        var timeString = ""
+        if (timeHours >= 1) timeString += timeHours.toInt().toString() + ":"
+        var timeMinutesString = (time.toInt() % 3600).toString()
+        if (timeMinutesString.length == 1 && timeString.isEmpty()) timeString += "0"
+        timeString += (time / 60.0).toInt().toString() + ":"
+        val secondsString = (time.toInt() % 60).toString()
+        if (secondsString.length == 1) timeString += "0"
+        timeString += secondsString
+        averageSpeed = distance / time * 3.6
+        mMsgView!!.text = "  ${distance.toInt().toString()} m   ${((averageSpeed * 100).toInt() / 100.0).toString()} km/h  $timeString"
+    }
+
+    fun returnDateString(isoString: String) : String {
+        // Convert from:
+        // 2019-09-13T21:00:17.047Z
+        // To:
+        // Monday 11:00 PM
+        val isoFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
+        isoFormatter.timeZone = TimeZone.getTimeZone("UTC")
+        var convertedDate = Date()
+        try {
+            convertedDate = isoFormatter.parse(isoString)
+        } catch(e: ParseException) {
+            Log.d("PARSE", "Cannot parse date '$isoString'")
+        }
+        val outDateString = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+
+        return outDateString.format(convertedDate)
+    }
+
 
 
 
@@ -169,14 +230,30 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             override fun onLocationResult(p0: LocationResult) {
                 super.onLocationResult(p0)
 
-                var prevLocation = p0.lastLocation
-                if (!firstTime) prevLocation = lastLocation
-                firstTime = false
-                lastLocation = p0.lastLocation
-                placeMarkerOnMap(LatLng(prevLocation.latitude, prevLocation.longitude),
-                    LatLng(lastLocation.latitude, lastLocation.longitude),
-                    lastLocation.speed)
-                map.animateCamera(CameraUpdateFactory.newLatLng(LatLng(lastLocation.latitude, lastLocation.longitude)))
+                if (!stopClicked) {
+                    var prevLocation = p0.lastLocation
+                    if (!firstTime) prevLocation = lastLocation
+                    firstTime = false
+                    lastLocation = p0.lastLocation
+                    distance += prevLocation.distanceTo(lastLocation)
+                    val elapsedTimeSeconds =
+                        (System.currentTimeMillis() - serviceStartTime) / 1000.0
+                    showResults(distance, elapsedTimeSeconds)
+
+                    placeMarkerOnMap(
+                        LatLng(prevLocation.latitude, prevLocation.longitude),
+                        LatLng(lastLocation.latitude, lastLocation.longitude),
+                        lastLocation.speed
+                    )
+                    map.animateCamera(
+                        CameraUpdateFactory.newLatLng(
+                            LatLng(
+                                lastLocation.latitude,
+                                lastLocation.longitude
+                            )
+                        )
+                    )
+                }
             }
         }
         createLocationRequest()
@@ -187,17 +264,22 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         LocalBroadcastManager.getInstance(this).registerReceiver(
             object: BroadcastReceiver() {
                 override fun onReceive(context: Context, intent:Intent) {
-                    Toast.makeText(applicationContext, "Broadcast receiver works.", Toast.LENGTH_LONG).show()
+                    //Toast.makeText(applicationContext, "Broadcast receiver works.", Toast.LENGTH_LONG).show()
                     val latitude = intent.getStringExtra(LocationMonitoringService.EXTRA_LATITUDE)
                     val longitude = intent.getStringExtra(LocationMonitoringService.EXTRA_LONGITUDE)
 
                     if (latitude != null && longitude != null)
                     {
-                        mMsgView!!.text = getString(R.string.msg_location_service_started) + "\n Latitude : " + latitude + "\n Longitude: " + longitude
+                        //mMsgView!!.text = getString(R.string.msg_location_service_started) + "\n Latitude : " + latitude + "\n Longitude: " + longitude
                     }
                 }
             }, IntentFilter(LocationMonitoringService.ACTION_LOCATION_BROADCAST)
         )
+
+        btn_stop_tracking.setOnClickListener{
+            //Toast.makeText(this, "Finishe clicked", Toast.LENGTH_LONG).show()
+            stopClicked()
+        }
     }
 
     private fun placeMarkerOnMap(fromLocation: LatLng, toLocation: LatLng, speed: Float) {
@@ -214,7 +296,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     LatLng(toLocation.latitude, toLocation.longitude))
         )
         println("Placing a marker at lat ${toLocation.latitude} lon ${toLocation.longitude}")
-        Toast.makeText(this, "$speedToDisplay km/h", Toast.LENGTH_LONG).show()
+        //Toast.makeText(this, "$speedToDisplay km/h", Toast.LENGTH_LONG).show()
     }
 
     fun getColor(speed: Double) : Long {
@@ -252,9 +334,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     val lat = currentLatLng.latitude
                     val lon = currentLatLng.longitude
                     map.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 12f))
-                    Toast.makeText(this, "lat: $lat, lon: $lon", Toast.LENGTH_LONG).show()
+                    //Toast.makeText(this, "lat: $lat, lon: $lon", Toast.LENGTH_LONG).show()
                 } else {
-                    Toast.makeText(this, "location is null", Toast.LENGTH_LONG).show()
+                    //Toast.makeText(this, "location is null", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -309,20 +391,43 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         map = googleMap
         setUpMap()
         work()
+        mapReady = true
+        Toast.makeText(this, "Map ready", Toast.LENGTH_LONG).show()
+
+        // Do this in case it was not done in the onResume because the map was not ready yet
+        showTrack(false)
+
         // Add polylines to the map.
         // Polylines are useful to show a route or some other connection between points.
-        val polyline1 = googleMap.addPolyline(
-            PolylineOptions()
-                .clickable(true)
-                .add(
-                    LatLng(-35.016, 143.321),
-                    LatLng(-34.747, 145.592),
-                    LatLng(-34.364, 147.891),
-                    LatLng(-33.501, 150.217),
-                    LatLng(-32.306, 149.248),
-                    LatLng(-32.491, 147.309)
-                )
-        )
+//        val polyline1 = googleMap.addPolyline(
+//            PolylineOptions()
+//                .clickable(true)
+//                .add(
+//                    LatLng(-35.016, 143.321),
+//                    LatLng(-34.747, 145.592),
+//                    LatLng(-34.364, 147.891),
+//                    LatLng(-33.501, 150.217),
+//                    LatLng(-32.306, 149.248),
+//                    LatLng(-32.491, 147.309)
+//                )
+//        )
+    }
+
+    fun showTrack(accumulateDistance: Boolean) {
+        var firstLocation = true
+        lateinit var previousLocation: Location
+        for (location in LocationMonitoringService.locations) {
+            if (firstLocation) previousLocation = location
+            firstLocation = false
+            val lat = location.latitude
+            val lon = location.longitude
+            val time = returnDateString(location.time.toString())
+            println("Lat=$lat Lon=$lon time=$time")
+
+            if (mapReady) placeMarkerOnMap(LatLng(previousLocation.latitude, previousLocation.longitude), LatLng(lat, lon), location.speed)
+            if (accumulateDistance)distance += previousLocation.distanceTo(location)
+            previousLocation = location
+        }
     }
 
 //    private fun startLocationUpdates() {
@@ -540,9 +645,18 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     public override fun onDestroy() {
         //Stop location sharing service to app server.........
-        stopService(Intent(this, LocationMonitoringService::class.java))
-        mAlreadyStartedService = false
+        //stopService(Intent(this, LocationMonitoringService::class.java))
+        //mAlreadyStartedService = false
         //Ends................................................
         super.onDestroy()
+    }
+
+    fun stopClicked() {
+        //Toast.makeText(this, "Finishe clicked", Toast.LENGTH_LONG).show()
+        //Stop location sharing service to app server.........
+        stopService(Intent(this, LocationMonitoringService::class.java))
+        mAlreadyStartedService = false
+        stopClicked = true
+        btn_stop_tracking.isEnabled = false
     }
 }
