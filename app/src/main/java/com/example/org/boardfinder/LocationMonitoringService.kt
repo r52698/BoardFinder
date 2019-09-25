@@ -157,7 +157,7 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
 
     private fun sendMessageToUI(lat: String, lng: String) {
 
-        Log.d(TAG, "Sending info...")
+        Log.d(TAG, "Sending info... lat=$lat long=$lng")
 
         val intent = Intent(ACTION_LOCATION_BROADCAST)
         intent.putExtra(EXTRA_LATITUDE, lat)
