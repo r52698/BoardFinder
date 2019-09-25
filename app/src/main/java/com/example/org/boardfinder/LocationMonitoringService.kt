@@ -59,6 +59,7 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                     if (!stopClicked) {
                         locations.add(mLastLocation!!)
                         timeStamps.add(Timestamp(System.currentTimeMillis()).toString())
+                        if (locations.count() == 3600) mLocationRequest.setFastestInterval(5000)
                     }
                 }
             }

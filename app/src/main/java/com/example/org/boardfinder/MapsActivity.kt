@@ -116,9 +116,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // 1
         locationRequest = LocationRequest()
         // 2
-        locationRequest.interval = 50000
+        locationRequest.interval = 10000
         // 3
-        locationRequest.fastestInterval = 5000
+        locationRequest.fastestInterval = 1000
         locationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
 
         val builder = LocationSettingsRequest.Builder()
@@ -256,6 +256,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     val elapsedTimeSeconds =
                         (System.currentTimeMillis() - serviceStartTime) / 1000.0
                     showResults(distance, elapsedTimeSeconds)
+
+                    if (elapsedTimeSeconds > 3600 && locationRequest.fastestInterval != 5000L) locationRequest.fastestInterval = 5000L
 
                     placeMarkerOnMap(
                         LatLng(prevLocation.latitude, prevLocation.longitude),
