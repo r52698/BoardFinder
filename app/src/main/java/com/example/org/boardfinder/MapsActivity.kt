@@ -86,12 +86,15 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onSaveInstanceState(outState: Bundle?) {
         super.onSaveInstanceState(outState)
         outState?.putString(EXTRA_TEXT, msgView.text.toString())
+        outState?.putBoolean(EXTRA_STOP_CLICKED, stopClicked)
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle?) {
         super.onRestoreInstanceState(savedInstanceState)
         if (savedInstanceState != null) {
             msgView.text = savedInstanceState.getString(EXTRA_TEXT)
+            stopClicked = savedInstanceState.getBoolean(EXTRA_STOP_CLICKED)
+            if (stopClicked) btn_stop_tracking.isEnabled = false
         }
     }
 
