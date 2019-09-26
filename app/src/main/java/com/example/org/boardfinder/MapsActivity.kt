@@ -8,6 +8,7 @@ import android.location.Location
 import android.net.ConnectivityManager
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.transition.Visibility
 import android.util.Log
 import android.view.View
 import android.widget.TextView
@@ -23,6 +24,7 @@ import com.google.android.gms.location.*
 import com.google.android.gms.maps.*
 
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.PolylineOptions
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.android.synthetic.main.activity_maps.*
@@ -49,9 +51,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var averageSpeed = "0.0"
 
     private var mapReady = false
-
-    private var pauseTime = 0L
-    private var pauseStartTime = 0L
 
     /**
      * Return the availability of GooglePlayServices
@@ -91,8 +90,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         super.onSaveInstanceState(outState)
         outState?.putString(EXTRA_TEXT, msgView.text.toString())
         outState?.putString(EXTRA_STATE, appState)
-        outState?.putLong(EXTRA_PAUSE_TIME, pauseTime)
-        outState?.putLong(EXTRA_PAUSE_START_TIME, pauseStartTime)
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle?) {
@@ -100,8 +97,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         if (savedInstanceState != null) {
             msgView.text = savedInstanceState.getString(EXTRA_TEXT)
             appState = savedInstanceState.getString(EXTRA_STATE)
-            pauseTime = savedInstanceState.getLong(EXTRA_PAUSE_TIME)
-            pauseStartTime = savedInstanceState.getLong(EXTRA_PAUSE_START_TIME)
             updateButtons()
         }
     }
@@ -110,28 +105,36 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         when (appState) {
             "bst" ->{
                 btn_start_tracking.isEnabled = true
-                btn_pause_tracking.isEnabled = false
                 btn_stop_tracking.isEnabled = false
+                btn_mark_cul.isEnabled = false
+                btn_report_found.isEnabled = false
             }
             "run" ->{
                 btn_start_tracking.isEnabled = false
-                btn_pause_tracking.isEnabled = true
                 btn_stop_tracking.isEnabled = true
-            }
-            "pas" ->{
-                btn_start_tracking.isEnabled = true
-                btn_pause_tracking.isEnabled = false
-                btn_stop_tracking.isEnabled = true
+                btn_mark_cul.isEnabled = false
+                btn_report_found.isEnabled = false
             }
             "stp" ->{
                 btn_start_tracking.isEnabled = false
-                btn_pause_tracking.isEnabled = false
                 btn_stop_tracking.isEnabled = false
+                btn_mark_cul.isEnabled = true
+                btn_report_found.isEnabled = false
+                targetImageView.visibility = View.VISIBLE
             }
             "mrk" ->{
                 btn_start_tracking.isEnabled = false
-                btn_pause_tracking.isEnabled = false
                 btn_stop_tracking.isEnabled = false
+                btn_mark_cul.isEnabled = false
+                btn_report_found.isEnabled = true
+                btn_report_found.visibility = View.VISIBLE
+                btn_start_tracking.visibility = View.INVISIBLE
+                targetImageView.visibility = View.INVISIBLE
+            }
+            "fnd" ->{
+                btn_start_tracking.isEnabled = false
+                btn_stop_tracking.isEnabled = false
+                btn_mark_cul.isEnabled = false
             }
         }
     }
@@ -201,14 +204,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     // 2
     override fun onPause() {
         super.onPause()
-        if (appState == "run" || appState == "pas") fusedLocationClient.removeLocationUpdates(locationCallback)
+        if (appState == "run") fusedLocationClient.removeLocationUpdates(locationCallback)
     }
 
     // 3
     public override fun onResume() {
         super.onResume()
 
-        if (appState == "run" || appState == "pas") {
+        if (appState == "run") {
             startLocationUpdates()
             startStep1()
             distance = 0.0
@@ -221,8 +224,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 Toast.LENGTH_LONG
             ).show()
             showTrack(true)
-            if (appState == "pas") pauseTime = System.currentTimeMillis() - pauseStartTime
-            val elapsedTimeSeconds = (System.currentTimeMillis() - serviceStartTime - pauseTime) / 1000.0
+            val elapsedTimeSeconds = (System.currentTimeMillis() - serviceStartTime) / 1000.0
             showResults(distance, elapsedTimeSeconds)
             //Toast.makeText(this, "Distance = $distance", Toast.LENGTH_LONG).show()
 
@@ -290,8 +292,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     firstTime = false
                     lastLocation = p0.lastLocation
                     distance += prevLocation.distanceTo(lastLocation)
-                    if (appState == "pas") pauseTime = System.currentTimeMillis() - pauseStartTime
-                    val elapsedTimeSeconds = (System.currentTimeMillis() - serviceStartTime - pauseTime) / 1000.0
+
+                    val elapsedTimeSeconds = (System.currentTimeMillis() - serviceStartTime) / 1000.0
                     showResults(distance, elapsedTimeSeconds)
 
                     //if (elapsedTimeSeconds > 20 && locationRequest.fastestInterval != 5000L) locationRequest.fastestInterval = 5000L
@@ -314,6 +316,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
         mMsgView = findViewById(R.id.msgView) as TextView
         if (appState != "bst") startClicked(btn_start_tracking)
+        else alertDialog("", "Click START when starting your activity. The app will keep track of your movement.")
+    }
+
+    private fun displayMarker(latLng: LatLng) {
+        val markerOptions = MarkerOptions().position(latLng)
+        map.addMarker(markerOptions)
     }
 
     private fun placeMarkerOnMap(fromLocation: LatLng, toLocation: LatLng, speed: Float) {
@@ -702,11 +710,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mAlreadyStartedService = false
         appState = "stp"
         updateButtons()
+        alertDialog("", "Use the colored track to speculate where you lost your board." +
+                " Pan the map such that this point will be in the center of the target, then click MARK." +
+                " Make sure to do it while still in the water with your kite!")
     }
 
     fun startClicked(view: View) {
-
-        if (appState == "pas") pauseTime += System.currentTimeMillis() - pauseStartTime
 
         createLocationRequest()
 
@@ -724,20 +733,49 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 }
             }, IntentFilter(LocationMonitoringService.ACTION_LOCATION_BROADCAST)
         )
-        if (appState != "pas") startStep1()
+        startStep1()
 
-        if (appState == "bst" || appState == "pas") {
-            appState = "run"
-            updateButtons()
-        }
+        appState = "run"
+        updateButtons()
+        alertDialog("", "Click FINISH when you are done with the activity. The app will stop keeping track of your movement.")
     }
 
-    fun pauseClicked (view: View) {
-        appState = "pas"
+    fun markClicked (view: View) {
+        val centerLatLang = map.getProjection().getVisibleRegion().latLngBounds.getCenter();
+        displayMarker(centerLatLang)
+        appState = "mrk"
         updateButtons()
-        pauseStartTime = System.currentTimeMillis()
-        val elapsedTimeSeconds =
-            (System.currentTimeMillis() - serviceStartTime - pauseTime) / 1000.0
-        showResults(distance, elapsedTimeSeconds)
+        alertDialog("", "The estimated location of where you lost your board is marked." +
+        " You will soon see the estimated current location of your board. When you find it, please" +
+        " click FOUND HERE such that the app can improve its locating algorithm. Thank you!")
+    }
+
+    fun foundClicked (view: View) {
+
+    }
+
+    fun alertDialog(title: String, message: String) {
+        // build alert dialog
+        val dialogBuilder = AlertDialog.Builder(this)
+
+        // set message of alert dialog
+        dialogBuilder.setMessage(message)
+            // if the dialog is cancelable
+            .setCancelable(false)
+            // positive button text and action
+//            .setPositiveButton("OK", DialogInterface.OnClickListener {
+//                    dialog, id -> finish()
+//            })
+            // negative button text and action
+            .setNegativeButton("OK", DialogInterface.OnClickListener {
+                    dialog, id -> dialog.cancel()
+            })
+
+        // create dialog box
+        val alert = dialogBuilder.create()
+        // set title for alert dialog box
+        alert.setTitle(title)
+        // show alert dialog
+        alert.show()
     }
 }

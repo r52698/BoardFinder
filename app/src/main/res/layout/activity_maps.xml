@@ -28,25 +28,45 @@
             android:textSize="15sp" />
 
     <Button
-            android:id="@+id/btn_pause_tracking"
+            android:id="@+id/btn_stop_tracking"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|center"
             android:layout_margin="10dp"
             android:enabled="false"
-            android:onClick="pauseClicked"
-            android:text="@string/pause"
+            android:onClick="stopClicked"
+            android:text="@string/finish"
             android:textSize="15sp" />
 
     <Button
-            android:id="@+id/btn_stop_tracking"
+            android:id="@+id/btn_mark_cul"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
             android:layout_margin="10dp"
             android:enabled="false"
-            android:onClick="stopClicked"
-            android:text="@string/finish"
+            android:onClick="markClicked"
+            android:text="@string/mark"
             android:textSize="15sp" />
+
+    <Button
+            android:id="@+id/btn_report_found"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|left"
+            android:layout_margin="10dp"
+            android:enabled="false"
+            android:onClick="foundClicked"
+            android:text="@string/found"
+            android:textSize="15sp"
+            android:visibility="invisible" />
+
+    <ImageView
+            android:id="@+id/targetImageView"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:layout_gravity="center|center"
+            android:src="@mipmap/target"
+            android:visibility="invisible" />
 
 </fragment>
