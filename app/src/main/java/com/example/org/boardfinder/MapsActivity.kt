@@ -51,7 +51,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private var mapReady = false
 
-    private lateinit var lastCurrentBoardLatLng: LatLng
+    private var lastCurrentBoardLatLng = LatLng(32.0, 35.0)
+
+    private var zoomLevel = 12f
 
     /**
      * Return the availability of GooglePlayServices
@@ -98,6 +100,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         outState?.putString(EXTRA_STATE, appState)
         outState?.putDouble(EXTRA_LOST_LAT, lostLatLng.latitude)
         outState?.putDouble(EXTRA_LOST_LNG, lostLatLng.longitude)
+        outState?.putDouble(EXTRA_END_LAT, endLatLng.latitude)
+        outState?.putDouble(EXTRA_END_LNG, endLatLng.longitude)
+        outState?.putDouble(EXTRA_CURRENT_LAT, lastCurrentBoardLatLng.latitude)
+        outState?.putDouble(EXTRA_CURRENT_LNG, lastCurrentBoardLatLng.longitude)
+        outState?.putFloat(EXTRA_ZOOM_LEVEL, map.cameraPosition.zoom)
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle?) {
@@ -108,6 +115,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             updateButtons()
             lostLatLng = LatLng(savedInstanceState.getDouble(EXTRA_LOST_LAT),
                 savedInstanceState.getDouble(EXTRA_LOST_LNG))
+            endLatLng = LatLng(savedInstanceState.getDouble(EXTRA_END_LAT),
+                savedInstanceState.getDouble(EXTRA_END_LNG))
+            lastCurrentBoardLatLng = LatLng(savedInstanceState.getDouble(EXTRA_CURRENT_LAT),
+                savedInstanceState.getDouble(EXTRA_CURRENT_LNG))
+            zoomLevel = savedInstanceState.getFloat(EXTRA_ZOOM_LEVEL)
+            createLocationRequest()
         }
     }
 
@@ -228,11 +241,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             averageSpeed = "0.0"
             lateinit var previousLocation: Location
             var firstLocation = true
-            Toast.makeText(
-                this,
-                "${LocationMonitoringService.locations.count()} locations",
-                Toast.LENGTH_LONG
-            ).show()
+//            Toast.makeText(
+//                this,
+//                "${LocationMonitoringService.locations.count()} locations",
+//                Toast.LENGTH_LONG
+//            ).show()
             showTrack(true)
             val elapsedTimeSeconds = (System.currentTimeMillis() - serviceStartTime) / 1000.0
             showResults(distance, elapsedTimeSeconds)
@@ -258,7 +271,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         timeString += secondsString
         averageSpeed = (distance / time * 3.6).toString()
         if (averageSpeed.length > 4) averageSpeed = averageSpeed.substring(0, 4)
-        mMsgView!!.text = "  ${distance.toInt()} m   $averageSpeed km/h  $timeString"
+        mMsgView!!.text = "${distance.toInt()} m   $averageSpeed km/h  $timeString"
     }
 
     fun returnDateString(isoString: String) : String {
@@ -327,7 +340,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     )
                 }
                 else if (appState == "mrk") {
-                    println("displaying marker for current position")
+                    println("displaying marker for current position lat=${lastCurrentBoardLatLng.latitude} lng=${lastCurrentBoardLatLng.longitude}")
                     if (!firstMark) {
                         marker.remove()
                     }
@@ -343,7 +356,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mMsgView = findViewById(R.id.msgView) as TextView
         when (appState) {
             "run" -> startClicked(btn_start_tracking)
-            "bst" -> alertDialog("", "Click START when starting your activity. The app will keep track of your movement.")
         }
     }
 
@@ -403,7 +415,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     val currentLatLng = LatLng(location.latitude, location.longitude)
                     val lat = currentLatLng.latitude
                     val lon = currentLatLng.longitude
-                    map.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 12f))
+                    map.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, zoomLevel))
                     //Toast.makeText(this, "lat: $lat, lon: $lon", Toast.LENGTH_LONG).show()
                 } else {
                     //Toast.makeText(this, "location is null", Toast.LENGTH_LONG).show()
@@ -462,11 +474,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         setUpMap()
         work()
         mapReady = true
-        Toast.makeText(this, "Map ready", Toast.LENGTH_LONG).show()
+        //Toast.makeText(this, "Map ready", Toast.LENGTH_LONG).show()
 
         // Do this in case it was not done in the onResume because the map was not ready yet
         if (appState != "bst") showTrack(false)
-        if (appState == "mrk" && lostLatLng.latitude != 32.0 && lostLatLng.longitude != 35.0) showMarkerInLostPosition()
+        if (appState == "mrk" && lostLatLng.latitude != 32.0 && lostLatLng.longitude != 35.0) {
+            showMarkerInLostPosition()
+            showMarkerInEndPosition()
+        }
 
         // Add polylines to the map.
         // Polylines are useful to show a route or some other connection between points.
@@ -739,9 +754,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mAlreadyStartedService = false
         appState = "stp"
         updateButtons()
-        alertDialog("", "Use the colored track to speculate where you lost your board." +
-                " Pan the map such that this point will be in the center of the target, then click MARK." +
-                " Make sure to do it while still in the water with your kite!")
     }
 
     fun startClicked(view: View) {
@@ -766,7 +778,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         appState = "run"
         updateButtons()
-        alertDialog("", "Click FINISH when you are done with the activity. The app will stop keeping track of your movement.")
     }
 
     fun markClicked (view: View) {
@@ -780,6 +791,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         endTimeStamp = lastTrackedLocation.time
         lostTimeStamp = FindBoardService.getLostBoardTimeStamp()
 
+        showMarkerInEndPosition()
+    }
+
+    fun showMarkerInEndPosition() {
         val markerOptions = MarkerOptions().position(endLatLng)
             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA))
             .title("Reported")
@@ -789,13 +804,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     fun showMarkerInLostPosition()
     {
         displayMarker(lostLatLng)
-        alertDialog("", "The estimated location of where you lost your board is marked." +
-                " You will soon see the estimated current location of your board. When you find it, please" +
-                " click FOUND HERE such that the app can improve its locating algorithm. Thank you!")
-    }
-
-    fun showMarkerInEstimatedBoardPosition(positionLatLng: LatLng) {
-
     }
 
     fun foundClicked (view: View) {
@@ -825,5 +833,18 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         alert.setTitle(title)
         // show alert dialog
         alert.show()
+    }
+
+    fun helpClicked (view: View) {
+        when (appState) {
+            "bst" -> alertDialog("", "Click START when starting your activity. The app will keep track of your movement.")
+            "run" -> alertDialog("", "Click FINISH when you are done with the activity. The app will stop keeping track of your movement.")
+            "stp" -> alertDialog("", "Use the colored track to speculate where you lost your board." +
+                    " Pan the map such that this point will be in the center of the target, then click MARK." +
+                    " Make sure to do it while still in the water with your kite!")
+            "mrk" -> alertDialog("", "The estimated location of where you lost your board is marked in red." +
+                    " The estimated current location of your board is marked in orange. When you find it, please" +
+                    " click FOUND HERE such that the app can improve its locating algorithm. Thank you!")
+        }
     }
 }

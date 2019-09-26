@@ -12,8 +12,9 @@ object FindBoardService {
 
     fun getCurrentBoardPosition() : LatLng {
         val lost2reportedTimeMillis = endTimeStamp - lostTimeStamp
-        val now2reportedRatio =
+        val now2reportedRatio = 1.0 *
             (System.currentTimeMillis() - lostTimeStamp) / lost2reportedTimeMillis
+        println("ratio=$now2reportedRatio")
         val currentKiteLat =
             lostLatLng.latitude + (endLatLng.latitude - lostLatLng.latitude) * now2reportedRatio
         val currentKiteLng =

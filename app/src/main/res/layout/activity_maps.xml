@@ -12,7 +12,8 @@
             android:id="@+id/msgView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="20sp"
+            android:layout_gravity="top|center"
+            android:textSize="18sp"
             android:textColor="#000"
             android:text="@string/msg_location_service_not_started" />
 
@@ -68,5 +69,15 @@
             android:layout_gravity="center|center"
             android:src="@mipmap/target"
             android:visibility="invisible" />
+
+    <ImageButton
+            android:id="@+id/helpImageButton"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_gravity="top|start"
+            android:layout_margin="10dp"
+            android:onClick="helpClicked"
+            android:src="@android:drawable/ic_menu_help"
+            android:visibility="visible" />
 
 </fragment>
