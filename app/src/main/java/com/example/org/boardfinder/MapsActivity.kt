@@ -16,6 +16,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import com.example.org.boardfinder.LocationMonitoringService.Companion.locations
 import com.example.org.boardfinder.LocationMonitoringService.Companion.serviceStartTime
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
@@ -331,7 +332,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         marker.remove()
                     }
                     firstMark = false
-                    lastCurrentBoardLatLng = getCurrentBoardPosition()
+                    lastCurrentBoardLatLng = FindBoardService.getCurrentBoardPosition()
                     val markerOptions = MarkerOptions().position(lastCurrentBoardLatLng)
                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
                         .title("Look here")
@@ -774,18 +775,15 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         updateButtons()
         showMarkerInLostPosition()
 
-        getCurrentBoardPosition()
+        val lastTrackedLocation = locations[locations.count() - 1]
+        endLatLng = LatLng(lastTrackedLocation.latitude, lastTrackedLocation.longitude)
+        endTimeStamp = lastTrackedLocation.time
+        lostTimeStamp = FindBoardService.getLostBoardTimeStamp()
+
         val markerOptions = MarkerOptions().position(endLatLng)
             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA))
             .title("Reported")
         map.addMarker(markerOptions)
-    }
-
-    fun getCurrentBoardPosition() : LatLng {
-        endLatLng = LatLng(lastLocation.latitude, lastLocation.longitude)
-        endTimeStamp = lastLocation.time
-        lostTimeStamp = FindBoardService.getLostBoardTimeStamp()
-        return FindBoardService.getCurrentBoardPosition()
     }
 
     fun showMarkerInLostPosition()
