@@ -20,7 +20,7 @@ import android.util.TimeFormatException
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import com.example.org.boardfinder.MapsActivity.Companion.stopClicked
+import com.example.org.boardfinder.MapsActivity.Companion.appState
 
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.api.GoogleApiClient
@@ -56,10 +56,10 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                     //Send result to activities
                     sendMessageToUI(mLastLocation!!.latitude.toString(), mLastLocation!!.longitude.toString())
 
-                    if (!stopClicked) {
+                    if (appState == "run") {
                         locations.add(mLastLocation!!)
                         timeStamps.add(Timestamp(System.currentTimeMillis()).toString())
-                        if (locations.count() == 3600) mLocationRequest.setFastestInterval(5000)
+                        //if (locations.count() == 20) mLocationRequest.setFastestInterval(5000)
                     }
                 }
             }
@@ -95,7 +95,8 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
         //val notificationIntent =  Intent(this, ExampleActivity::class.java)
         //val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0)
         //notification.setLatestEventInfo(this, getText(R.string.notification_title), getText(R.string.notification_message), pendingIntent)
-        startForeground(ONGOING_NOTIFICATION_ID, notification);
+        startForeground(ONGOING_NOTIFICATION_ID, notification)
+        serviceStartTime = System.currentTimeMillis()
     }
 
     override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
@@ -186,6 +187,6 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
 
         var locations = mutableListOf<Location>()
         var timeStamps = mutableListOf<String>()
-        val serviceStartTime = System.currentTimeMillis()
+        var serviceStartTime = System.currentTimeMillis()
     }
 }

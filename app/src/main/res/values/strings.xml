@@ -15,4 +15,6 @@
     <string name="channel_name">Channel_name</string>
     <string name="channel_description">Channel_description</string>
     <string name="finish">Finish</string>
+    <string name="start">Start</string>
+    <string name="pause">Pause</string>
 </resources>

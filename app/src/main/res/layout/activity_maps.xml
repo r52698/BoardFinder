@@ -17,12 +17,36 @@
             android:text="@string/msg_location_service_not_started" />
 
     <Button
+            android:id="@+id/btn_start_tracking"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="10dp"
+            android:enabled="true"
+            android:onClick="startClicked"
+            android:text="@string/start"
+            android:textSize="15sp" />
+
+    <Button
+            android:id="@+id/btn_pause_tracking"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center"
+            android:layout_margin="10dp"
+            android:enabled="false"
+            android:onClick="pauseClicked"
+            android:text="@string/pause"
+            android:textSize="15sp" />
+
+    <Button
             android:id="@+id/btn_stop_tracking"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:layout_marginTop="30dp"
-            android:enabled="true"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="10dp"
+            android:enabled="false"
+            android:onClick="stopClicked"
             android:text="@string/finish"
-            android:textSize="20sp" />
+            android:textSize="15sp" />
+
 </fragment>

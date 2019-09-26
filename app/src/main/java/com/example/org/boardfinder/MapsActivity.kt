@@ -46,9 +46,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var mMsgView: TextView? = null
 
     private var distance = 0.0
-    private var averageSpeed = 0.0
+    private var averageSpeed = "0.0"
 
     private var mapReady = false
+
+    private var pauseTime = 0L
+    private var pauseStartTime = 0L
 
     /**
      * Return the availability of GooglePlayServices
@@ -80,21 +83,56 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
          */
         private val REQUEST_PERMISSIONS_REQUEST_CODE = 34
 
-        var stopClicked = false
+        var appState = "bst"
+        // bst, run, pas, stp, mrk
     }
 
     override fun onSaveInstanceState(outState: Bundle?) {
         super.onSaveInstanceState(outState)
         outState?.putString(EXTRA_TEXT, msgView.text.toString())
-        outState?.putBoolean(EXTRA_STOP_CLICKED, stopClicked)
+        outState?.putString(EXTRA_STATE, appState)
+        outState?.putLong(EXTRA_PAUSE_TIME, pauseTime)
+        outState?.putLong(EXTRA_PAUSE_START_TIME, pauseStartTime)
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle?) {
         super.onRestoreInstanceState(savedInstanceState)
         if (savedInstanceState != null) {
             msgView.text = savedInstanceState.getString(EXTRA_TEXT)
-            stopClicked = savedInstanceState.getBoolean(EXTRA_STOP_CLICKED)
-            if (stopClicked) btn_stop_tracking.isEnabled = false
+            appState = savedInstanceState.getString(EXTRA_STATE)
+            pauseTime = savedInstanceState.getLong(EXTRA_PAUSE_TIME)
+            pauseStartTime = savedInstanceState.getLong(EXTRA_PAUSE_START_TIME)
+            updateButtons()
+        }
+    }
+
+    private fun updateButtons(){
+        when (appState) {
+            "bst" ->{
+                btn_start_tracking.isEnabled = true
+                btn_pause_tracking.isEnabled = false
+                btn_stop_tracking.isEnabled = false
+            }
+            "run" ->{
+                btn_start_tracking.isEnabled = false
+                btn_pause_tracking.isEnabled = true
+                btn_stop_tracking.isEnabled = true
+            }
+            "pas" ->{
+                btn_start_tracking.isEnabled = true
+                btn_pause_tracking.isEnabled = false
+                btn_stop_tracking.isEnabled = true
+            }
+            "stp" ->{
+                btn_start_tracking.isEnabled = false
+                btn_pause_tracking.isEnabled = false
+                btn_stop_tracking.isEnabled = false
+            }
+            "mrk" ->{
+                btn_start_tracking.isEnabled = false
+                btn_pause_tracking.isEnabled = false
+                btn_stop_tracking.isEnabled = false
+            }
         }
     }
 
@@ -118,7 +156,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // 2
         locationRequest.interval = 10000
         // 3
-        locationRequest.fastestInterval = 1000
+        locationRequest.fastestInterval = 5000
         locationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
 
         val builder = LocationSettingsRequest.Builder()
@@ -163,21 +201,18 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     // 2
     override fun onPause() {
         super.onPause()
-        fusedLocationClient.removeLocationUpdates(locationCallback)
+        if (appState == "run" || appState == "pas") fusedLocationClient.removeLocationUpdates(locationCallback)
     }
 
     // 3
     public override fun onResume() {
         super.onResume()
-        println("onResume")
-        //if (!locationUpdateState) {
-            println("startLocationUpdates")
+
+        if (appState == "run" || appState == "pas") {
             startLocationUpdates()
-        //}
-        if (!stopClicked) {
             startStep1()
             distance = 0.0
-            averageSpeed = 0.0
+            averageSpeed = "0.0"
             lateinit var previousLocation: Location
             var firstLocation = true
             Toast.makeText(
@@ -186,7 +221,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 Toast.LENGTH_LONG
             ).show()
             showTrack(true)
-            val elapsedTimeSeconds = (System.currentTimeMillis() - serviceStartTime) / 1000.0
+            if (appState == "pas") pauseTime = System.currentTimeMillis() - pauseStartTime
+            val elapsedTimeSeconds = (System.currentTimeMillis() - serviceStartTime - pauseTime) / 1000.0
             showResults(distance, elapsedTimeSeconds)
             //Toast.makeText(this, "Distance = $distance", Toast.LENGTH_LONG).show()
 
@@ -208,8 +244,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val secondsString = (time.toInt() % 60).toString()
         if (secondsString.length == 1) timeString += "0"
         timeString += secondsString
-        averageSpeed = distance / time * 3.6
-        mMsgView!!.text = "  ${distance.toInt().toString()} m   ${((averageSpeed * 100).toInt() / 100.0).toString()} km/h  $timeString"
+        averageSpeed = (distance / time * 3.6).toString()
+        if (averageSpeed.length > 4) averageSpeed = averageSpeed.substring(0, 4)
+        mMsgView!!.text = "  ${distance.toInt()} m   $averageSpeed km/h  $timeString"
     }
 
     fun returnDateString(isoString: String) : String {
@@ -247,17 +284,17 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             override fun onLocationResult(p0: LocationResult) {
                 super.onLocationResult(p0)
 
-                if (!stopClicked) {
+                if (appState == "run") {
                     var prevLocation = p0.lastLocation
                     if (!firstTime) prevLocation = lastLocation
                     firstTime = false
                     lastLocation = p0.lastLocation
                     distance += prevLocation.distanceTo(lastLocation)
-                    val elapsedTimeSeconds =
-                        (System.currentTimeMillis() - serviceStartTime) / 1000.0
+                    if (appState == "pas") pauseTime = System.currentTimeMillis() - pauseStartTime
+                    val elapsedTimeSeconds = (System.currentTimeMillis() - serviceStartTime - pauseTime) / 1000.0
                     showResults(distance, elapsedTimeSeconds)
 
-                    if (elapsedTimeSeconds > 3600 && locationRequest.fastestInterval != 5000L) locationRequest.fastestInterval = 5000L
+                    //if (elapsedTimeSeconds > 20 && locationRequest.fastestInterval != 5000L) locationRequest.fastestInterval = 5000L
 
                     placeMarkerOnMap(
                         LatLng(prevLocation.latitude, prevLocation.longitude),
@@ -275,30 +312,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 }
             }
         }
-        createLocationRequest()
-
         mMsgView = findViewById(R.id.msgView) as TextView
-
-
-        LocalBroadcastManager.getInstance(this).registerReceiver(
-            object: BroadcastReceiver() {
-                override fun onReceive(context: Context, intent:Intent) {
-                    //Toast.makeText(applicationContext, "Broadcast receiver works.", Toast.LENGTH_LONG).show()
-                    val latitude = intent.getStringExtra(LocationMonitoringService.EXTRA_LATITUDE)
-                    val longitude = intent.getStringExtra(LocationMonitoringService.EXTRA_LONGITUDE)
-
-                    if (latitude != null && longitude != null)
-                    {
-                        //mMsgView!!.text = getString(R.string.msg_location_service_started) + "\n Latitude : " + latitude + "\n Longitude: " + longitude
-                    }
-                }
-            }, IntentFilter(LocationMonitoringService.ACTION_LOCATION_BROADCAST)
-        )
-
-        btn_stop_tracking.setOnClickListener{
-            //Toast.makeText(this, "Finishe clicked", Toast.LENGTH_LONG).show()
-            stopClicked()
-        }
+        if (appState != "bst") startClicked(btn_start_tracking)
     }
 
     private fun placeMarkerOnMap(fromLocation: LatLng, toLocation: LatLng, speed: Float) {
@@ -414,7 +429,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         Toast.makeText(this, "Map ready", Toast.LENGTH_LONG).show()
 
         // Do this in case it was not done in the onResume because the map was not ready yet
-        showTrack(false)
+        if (appState != "bst") showTrack(false)
 
         // Add polylines to the map.
         // Polylines are useful to show a route or some other connection between points.
@@ -447,6 +462,16 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             if (accumulateDistance)distance += previousLocation.distanceTo(location)
             previousLocation = location
         }
+//        if (LocationMonitoringService.locations.count() > 5) {
+//            var txt = ""
+//            for (i in 0..5) {
+//                //val tm = returnDateString(LocationMonitoringService.locations[i].time.toString())
+//                //val tm = returnDateString(LocationMonitoringService.timeStamps[i])
+//                val tm = System.currentTimeMillis() - LocationMonitoringService.locations[i].time
+//                txt += "${LocationMonitoringService.locations[i].latitude}  ${LocationMonitoringService.locations[i].longitude}  $tm\n"
+//            }
+//            Toast.makeText(this,txt, Toast.LENGTH_LONG).show()
+//        }
     }
 
 //    private fun startLocationUpdates() {
@@ -670,12 +695,49 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         super.onDestroy()
     }
 
-    fun stopClicked() {
-        //Toast.makeText(this, "Finishe clicked", Toast.LENGTH_LONG).show()
+    fun stopClicked(view: View) {
+        //Toast.makeText(this, "Finish clicked", Toast.LENGTH_LONG).show()
         //Stop location sharing service to app server.........
         stopService(Intent(this, LocationMonitoringService::class.java))
         mAlreadyStartedService = false
-        stopClicked = true
-        btn_stop_tracking.isEnabled = false
+        appState = "stp"
+        updateButtons()
+    }
+
+    fun startClicked(view: View) {
+
+        if (appState == "pas") pauseTime += System.currentTimeMillis() - pauseStartTime
+
+        createLocationRequest()
+
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            object: BroadcastReceiver() {
+                override fun onReceive(context: Context, intent:Intent) {
+                    //Toast.makeText(applicationContext, "Broadcast receiver works.", Toast.LENGTH_LONG).show()
+                    val latitude = intent.getStringExtra(LocationMonitoringService.EXTRA_LATITUDE)
+                    val longitude = intent.getStringExtra(LocationMonitoringService.EXTRA_LONGITUDE)
+
+                    if (latitude != null && longitude != null)
+                    {
+                        //mMsgView!!.text = getString(R.string.msg_location_service_started) + "\n Latitude : " + latitude + "\n Longitude: " + longitude
+                    }
+                }
+            }, IntentFilter(LocationMonitoringService.ACTION_LOCATION_BROADCAST)
+        )
+        if (appState != "pas") startStep1()
+
+        if (appState == "bst" || appState == "pas") {
+            appState = "run"
+            updateButtons()
+        }
+    }
+
+    fun pauseClicked (view: View) {
+        appState = "pas"
+        updateButtons()
+        pauseStartTime = System.currentTimeMillis()
+        val elapsedTimeSeconds =
+            (System.currentTimeMillis() - serviceStartTime - pauseTime) / 1000.0
+        showResults(distance, elapsedTimeSeconds)
     }
 }
