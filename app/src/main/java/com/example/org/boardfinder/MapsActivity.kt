@@ -84,12 +84,16 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         var appState = "bst"
         // bst, run, pas, stp, mrk
+
+        var lostLatLng = LatLng(32.0, 35.0)
     }
 
     override fun onSaveInstanceState(outState: Bundle?) {
         super.onSaveInstanceState(outState)
         outState?.putString(EXTRA_TEXT, msgView.text.toString())
         outState?.putString(EXTRA_STATE, appState)
+        outState?.putDouble(EXTRA_LOST_LAT, lostLatLng.latitude)
+        outState?.putDouble(EXTRA_LOST_LNG, lostLatLng.longitude)
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle?) {
@@ -98,6 +102,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             msgView.text = savedInstanceState.getString(EXTRA_TEXT)
             appState = savedInstanceState.getString(EXTRA_STATE)
             updateButtons()
+            lostLatLng = LatLng(savedInstanceState.getDouble(EXTRA_LOST_LAT),
+                savedInstanceState.getDouble(EXTRA_LOST_LNG))
         }
     }
 
@@ -315,8 +321,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             }
         }
         mMsgView = findViewById(R.id.msgView) as TextView
-        if (appState != "bst") startClicked(btn_start_tracking)
-        else alertDialog("", "Click START when starting your activity. The app will keep track of your movement.")
+        when (appState) {
+            "run" -> startClicked(btn_start_tracking)
+            "bst" -> alertDialog("", "Click START when starting your activity. The app will keep track of your movement.")
+        }
     }
 
     private fun displayMarker(latLng: LatLng) {
@@ -438,6 +446,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         // Do this in case it was not done in the onResume because the map was not ready yet
         if (appState != "bst") showTrack(false)
+        if (appState == "mrk" && lostLatLng.latitude != 32.0 && lostLatLng.longitude != 35.0) showMarkerInLostPosition()
 
         // Add polylines to the map.
         // Polylines are useful to show a route or some other connection between points.
@@ -741,13 +750,18 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     fun markClicked (view: View) {
-        val centerLatLang = map.getProjection().getVisibleRegion().latLngBounds.getCenter();
-        displayMarker(centerLatLang)
+        lostLatLng = map.getProjection().getVisibleRegion().latLngBounds.getCenter()
         appState = "mrk"
         updateButtons()
+        showMarkerInLostPosition()
+    }
+
+    fun showMarkerInLostPosition()
+    {
+        displayMarker(lostLatLng)
         alertDialog("", "The estimated location of where you lost your board is marked." +
-        " You will soon see the estimated current location of your board. When you find it, please" +
-        " click FOUND HERE such that the app can improve its locating algorithm. Thank you!")
+                " You will soon see the estimated current location of your board. When you find it, please" +
+                " click FOUND HERE such that the app can improve its locating algorithm. Thank you!")
     }
 
     fun foundClicked (view: View) {
