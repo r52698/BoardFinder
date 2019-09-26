@@ -297,11 +297,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             override fun onLocationResult(p0: LocationResult) {
                 super.onLocationResult(p0)
 
+                var prevLocation = p0.lastLocation
+                if (!firstTime) prevLocation = lastLocation
+                firstTime = false
+                lastLocation = p0.lastLocation
+
                 if (appState == "run") {
-                    var prevLocation = p0.lastLocation
-                    if (!firstTime) prevLocation = lastLocation
-                    firstTime = false
-                    lastLocation = p0.lastLocation
+
                     distance += prevLocation.distanceTo(lastLocation)
 
                     val elapsedTimeSeconds = (System.currentTimeMillis() - serviceStartTime) / 1000.0
