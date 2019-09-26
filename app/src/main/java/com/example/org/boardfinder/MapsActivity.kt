@@ -22,10 +22,8 @@ import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.*
+import com.google.android.gms.maps.model.*
 
-import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.MarkerOptions
-import com.google.android.gms.maps.model.PolylineOptions
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.android.synthetic.main.activity_maps.*
 import java.text.ParseException
@@ -51,6 +49,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var averageSpeed = "0.0"
 
     private var mapReady = false
+
+    private lateinit var lastCurrentBoardLatLng: LatLng
 
     /**
      * Return the availability of GooglePlayServices
@@ -86,6 +86,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         // bst, run, pas, stp, mrk
 
         var lostLatLng = LatLng(32.0, 35.0)
+        var endLatLng = LatLng(32.0, 35.0)
+        var lostTimeStamp = 0L
+        var endTimeStamp = 0L
     }
 
     override fun onSaveInstanceState(outState: Bundle?) {
@@ -288,6 +291,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         var firstTime = true
+        var firstMark = true
+        lateinit var marker: Marker
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(p0: LocationResult) {
                 super.onLocationResult(p0)
@@ -318,6 +323,18 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         )
                     )
                 }
+                else if (appState == "mrk") {
+                    println("displaying marker for current position")
+                    if (!firstMark) {
+                        marker.remove()
+                    }
+                    firstMark = false
+                    lastCurrentBoardLatLng = getCurrentBoardPosition()
+                    val markerOptions = MarkerOptions().position(lastCurrentBoardLatLng)
+                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
+                        .title("Look here")
+                    marker = map.addMarker(markerOptions)
+                }
             }
         }
         mMsgView = findViewById(R.id.msgView) as TextView
@@ -328,7 +345,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun displayMarker(latLng: LatLng) {
-        val markerOptions = MarkerOptions().position(latLng)
+        val markerOptions = MarkerOptions().position(latLng).title("Lost")
         map.addMarker(markerOptions)
     }
 
@@ -754,6 +771,19 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         appState = "mrk"
         updateButtons()
         showMarkerInLostPosition()
+
+        getCurrentBoardPosition()
+        val markerOptions = MarkerOptions().position(endLatLng)
+            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA))
+            .title("Reported")
+        map.addMarker(markerOptions)
+    }
+
+    fun getCurrentBoardPosition() : LatLng {
+        endLatLng = LatLng(lastLocation.latitude, lastLocation.longitude)
+        endTimeStamp = lastLocation.time
+        lostTimeStamp = FindBoardService.getLostBoardTimeStamp()
+        return FindBoardService.getCurrentBoardPosition()
     }
 
     fun showMarkerInLostPosition()
@@ -762,6 +792,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         alertDialog("", "The estimated location of where you lost your board is marked." +
                 " You will soon see the estimated current location of your board. When you find it, please" +
                 " click FOUND HERE such that the app can improve its locating algorithm. Thank you!")
+    }
+
+    fun showMarkerInEstimatedBoardPosition(positionLatLng: LatLng) {
+
     }
 
     fun foundClicked (view: View) {
