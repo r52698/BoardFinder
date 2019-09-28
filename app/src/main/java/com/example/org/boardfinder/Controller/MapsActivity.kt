@@ -1,14 +1,15 @@
-package com.example.org.boardfinder
+package com.example.org.boardfinder.Controller
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.*
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.ConnectivityManager
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.transition.Visibility
 import android.util.Log
 import android.view.View
 import android.widget.TextView
@@ -16,8 +17,12 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import com.example.org.boardfinder.LocationMonitoringService.Companion.locations
-import com.example.org.boardfinder.LocationMonitoringService.Companion.serviceStartTime
+import com.example.org.boardfinder.Services.FindBoardService
+import com.example.org.boardfinder.Services.LocationMonitoringService
+import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.locations
+import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.serviceStartTime
+import com.example.org.boardfinder.R
+import com.example.org.boardfinder.Utilities.*
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.common.api.ResolvableApiException
@@ -30,13 +35,13 @@ import kotlinx.android.synthetic.main.activity_maps.*
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.system.exitProcess
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private lateinit var map: GoogleMap
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var lastLocation: Location
-    private var requestingLocationUpdates: Boolean = false
 
     private lateinit var locationCallback: LocationCallback
 
@@ -55,10 +60,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private var zoomLevel = 12f
 
+    private var showingTrack = false
+
     /**
      * Return the availability of GooglePlayServices
      */
-    val isGooglePlayServicesAvailable:Boolean
+    private val isGooglePlayServicesAvailable:Boolean
         get() {
             val googleApiAvailability = GoogleApiAvailability.getInstance()
             val status = googleApiAvailability.isGooglePlayServicesAvailable(this)
@@ -78,12 +85,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1
         private const val REQUEST_CHECK_SETTINGS = 2
 
-        private val TAG = MapsActivity::class.java!!.simpleName
+        private val TAG = MapsActivity::class.java.simpleName
 
         /**
          * Code used in requesting runtime permissions.
          */
-        private val REQUEST_PERMISSIONS_REQUEST_CODE = 34
+        private const val REQUEST_PERMISSIONS_REQUEST_CODE = 34
 
         var appState = "bst"
         // bst, run, pas, stp, mrk
@@ -97,14 +104,17 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onSaveInstanceState(outState: Bundle?) {
         super.onSaveInstanceState(outState)
         outState?.putString(EXTRA_TEXT, msgView.text.toString())
-        outState?.putString(EXTRA_STATE, appState)
+        outState?.putString(EXTRA_STATE,
+            appState
+        )
         outState?.putDouble(EXTRA_LOST_LAT, lostLatLng.latitude)
         outState?.putDouble(EXTRA_LOST_LNG, lostLatLng.longitude)
         outState?.putDouble(EXTRA_END_LAT, endLatLng.latitude)
         outState?.putDouble(EXTRA_END_LNG, endLatLng.longitude)
         outState?.putDouble(EXTRA_CURRENT_LAT, lastCurrentBoardLatLng.latitude)
         outState?.putDouble(EXTRA_CURRENT_LNG, lastCurrentBoardLatLng.longitude)
-        outState?.putFloat(EXTRA_ZOOM_LEVEL, map.cameraPosition.zoom)
+        if (mapReady) zoomLevel = map.cameraPosition.zoom
+        outState?.putFloat(EXTRA_ZOOM_LEVEL, zoomLevel)
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle?) {
@@ -158,6 +168,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 btn_start_tracking.isEnabled = false
                 btn_stop_tracking.isEnabled = false
                 btn_mark_cul.isEnabled = false
+                btn_report_found.isEnabled = false
+                btn_restart_app.visibility = View.VISIBLE
+                btn_mark_cul.visibility = View.INVISIBLE
+                btn_restart_app.isEnabled = true
             }
         }
     }
@@ -166,10 +180,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun startLocationUpdates() {
         //1
         if (ActivityCompat.checkSelfPermission(this,
-                android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
-                arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION),
-                LOCATION_PERMISSION_REQUEST_CODE)
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                LOCATION_PERMISSION_REQUEST_CODE
+            )
             return
         }
         //2
@@ -206,7 +221,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     // Show the dialog by calling startResolutionForResult(),
                     // and check the result in onActivityResult().
                     e.startResolutionForResult(this@MapsActivity,
-                        REQUEST_CHECK_SETTINGS)
+                        REQUEST_CHECK_SETTINGS
+                    )
                 } catch (sendEx: IntentSender.SendIntentException) {
                     // Ignore the error.
                 }
@@ -234,19 +250,19 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     public override fun onResume() {
         super.onResume()
 
+        updateButtons()
+
         if (appState == "run") {
             startLocationUpdates()
             startStep1()
             distance = 0.0
             averageSpeed = "0.0"
-            lateinit var previousLocation: Location
-            var firstLocation = true
 //            Toast.makeText(
 //                this,
 //                "${LocationMonitoringService.locations.count()} locations",
 //                Toast.LENGTH_LONG
 //            ).show()
-            showTrack(true)
+            if (mapReady) showTrack(true)
             val elapsedTimeSeconds = (System.currentTimeMillis() - serviceStartTime) / 1000.0
             showResults(distance, elapsedTimeSeconds)
             //Toast.makeText(this, "Distance = $distance", Toast.LENGTH_LONG).show()
@@ -264,17 +280,17 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         var timeString = ""
         if (timeHours >= 1) timeString += timeHours.toInt().toString() + ":"
         val timeMinutesString = ((time.toInt() % 3600) / 60).toString()
-        if (timeMinutesString.length == 1 && timeString.isEmpty()) timeString += "0"
+        if (timeMinutesString.length == 1 && timeString.isNotEmpty()) timeString += "0"
         timeString += "$timeMinutesString:"
         val secondsString = (time.toInt() % 60).toString()
         if (secondsString.length == 1) timeString += "0"
         timeString += secondsString
         averageSpeed = (distance / time * 3.6).toString()
         if (averageSpeed.length > 4) averageSpeed = averageSpeed.substring(0, 4)
-        mMsgView!!.text = "${distance.toInt()} m   $averageSpeed km/h  $timeString"
+        mMsgView!!.text = "${distance.toInt()}m  ${averageSpeed}km/h $timeString"
     }
 
-    fun returnDateString(isoString: String) : String {
+    private fun returnDateString(isoString: String) : String {
         // Convert from:
         // 2019-09-13T21:00:17.047Z
         // To:
@@ -318,18 +334,22 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
                 if (appState == "run") {
 
-                    distance += prevLocation.distanceTo(lastLocation)
+                    if (!showingTrack) {
+                        showingTrack = true
+                        distance += prevLocation.distanceTo(lastLocation)
 
-                    val elapsedTimeSeconds = (System.currentTimeMillis() - serviceStartTime) / 1000.0
-                    showResults(distance, elapsedTimeSeconds)
+                        val elapsedTimeSeconds = (System.currentTimeMillis() - serviceStartTime) / 1000.0
+                        showResults(distance, elapsedTimeSeconds)
 
-                    //if (elapsedTimeSeconds > 20 && locationRequest.fastestInterval != 5000L) locationRequest.fastestInterval = 5000L
+                        //if (elapsedTimeSeconds > 20 && locationRequest.fastestInterval != 5000L) locationRequest.fastestInterval = 5000L
 
-                    placeMarkerOnMap(
-                        LatLng(prevLocation.latitude, prevLocation.longitude),
-                        LatLng(lastLocation.latitude, lastLocation.longitude),
-                        lastLocation.speed
-                    )
+                        placeMarkerOnMap(
+                            LatLng(prevLocation.latitude, prevLocation.longitude),
+                            LatLng(lastLocation.latitude, lastLocation.longitude),
+                            lastLocation.speed
+                        )
+                        showingTrack = false
+                    }
                     map.animateCamera(
                         CameraUpdateFactory.newLatLng(
                             LatLng(
@@ -345,7 +365,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         marker.remove()
                     }
                     firstMark = false
-                    lastCurrentBoardLatLng = FindBoardService.getCurrentBoardPosition()
+                    lastCurrentBoardLatLng =
+                        FindBoardService.getCurrentBoardPosition()
                     val markerOptions = MarkerOptions().position(lastCurrentBoardLatLng)
                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
                         .title("Look here")
@@ -353,7 +374,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 }
             }
         }
-        mMsgView = findViewById(R.id.msgView) as TextView
+        mMsgView = findViewById(R.id.msgView)
         when (appState) {
             "run" -> startClicked(btn_start_tracking)
         }
@@ -370,8 +391,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 //        // 2
 //        map.addMarker(markerOptions)
         val speedKmh = speed * 3.6
-        val speedToDisplay = (speedKmh * 100).toInt() / 100.0
-        val polyline1 = map.addPolyline(
+        //val speedToDisplay = (speedKmh * 100).toInt() / 100.0
+        map.addPolyline(
             PolylineOptions().color(getColor(speedKmh).toInt())
                 .clickable(true)
                 .add(LatLng(fromLocation.latitude, fromLocation.longitude),
@@ -400,9 +421,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         return colors[i + 1]
     }
 
-    fun work() {
+    private fun work() {
         if (ActivityCompat.checkSelfPermission(this,
-                android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             // 1
             map.isMyLocationEnabled = true
 
@@ -413,11 +434,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 if (location != null) {
                     lastLocation = location
                     val currentLatLng = LatLng(location.latitude, location.longitude)
-                    val lat = currentLatLng.latitude
-                    val lon = currentLatLng.longitude
+//                    val lat = currentLatLng.latitude
+//                    val lon = currentLatLng.longitude
                     map.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, zoomLevel))
                     //Toast.makeText(this, "lat: $lat, lon: $lon", Toast.LENGTH_LONG).show()
-                } else {
+                //} else {
                     //Toast.makeText(this, "location is null", Toast.LENGTH_LONG).show()
                 }
             }
@@ -434,7 +455,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     // contacts-related task you need to do.
                     startStep3()
                     work()
-                } else {
+                //} else {
                     // permission denied, boo! Disable the
                     // functionality that depends on this permission.
                 }
@@ -451,10 +472,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private fun setUpMap() {
         if (ActivityCompat.checkSelfPermission(this,
-                android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(
                 this,
-                arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION), LOCATION_PERMISSION_REQUEST_CODE
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                LOCATION_PERMISSION_REQUEST_CODE
             )
         }
     }
@@ -500,9 +522,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     fun showTrack(accumulateDistance: Boolean) {
+        showingTrack = true
+        distance = 0.0
+        averageSpeed = "0.0"
         var firstLocation = true
         lateinit var previousLocation: Location
-        for (location in LocationMonitoringService.locations) {
+        for (location in locations) {
             if (firstLocation) previousLocation = location
             firstLocation = false
             val lat = location.latitude
@@ -511,9 +536,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             println("Lat=$lat Lon=$lon time=$time")
 
             if (mapReady) placeMarkerOnMap(LatLng(previousLocation.latitude, previousLocation.longitude), LatLng(lat, lon), location.speed)
-            if (accumulateDistance)distance += previousLocation.distanceTo(location)
+            if (true)distance += previousLocation.distanceTo(location)
             previousLocation = location
         }
+        if (locations.isNotEmpty()) lastLocation = locations[locations.count() - 1]
+        showingTrack = false
 //        if (LocationMonitoringService.locations.count() > 5) {
 //            var txt = ""
 //            for (i in 0..5) {
@@ -546,7 +573,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
         else
         {
-            Toast.makeText(applicationContext, R.string.no_google_playservice_available, Toast.LENGTH_LONG).show()
+            Toast.makeText(applicationContext,
+                R.string.no_google_playservice_available, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -564,11 +592,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             return false
         }
 
-
-        if (dialog != null)
-        {
-            dialog!!.dismiss()
-        }
+        dialog?.dismiss()
 
         //Yes there is active internet connection. Next check Location is granted by user or not.
 
@@ -633,7 +657,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
      */
     private fun checkPermissions():Boolean {
         val permissionState1 = ActivityCompat.checkSelfPermission(this,
-            android.Manifest.permission.ACCESS_FINE_LOCATION)
+            Manifest.permission.ACCESS_FINE_LOCATION)
 
         val permissionState2 = ActivityCompat.checkSelfPermission(this,
             Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -646,7 +670,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
      */
     private fun requestPermissions() {
         val shouldProvideRationale = ActivityCompat.shouldShowRequestPermissionRationale(this,
-            android.Manifest.permission.ACCESS_FINE_LOCATION)
+            Manifest.permission.ACCESS_FINE_LOCATION)
 
         val shouldProvideRationale2 = ActivityCompat.shouldShowRequestPermissionRationale(this,
             Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -656,12 +680,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         if (shouldProvideRationale || shouldProvideRationale2)
         {
             Log.i(TAG, "Displaying permission rationale to provide additional context.")
-            showSnackbar(R.string.permission_rationale,
+            showSnackbar(
+                R.string.permission_rationale,
                 android.R.string.ok, View.OnClickListener {
                     // Request permission
                     ActivityCompat.requestPermissions(this,
-                        arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
-                        REQUEST_PERMISSIONS_REQUEST_CODE)
+                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                        REQUEST_PERMISSIONS_REQUEST_CODE
+                    )
                 })
         }
         else
@@ -671,8 +697,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             // sets the permission in a given state or the img_user denied the permission
             // previously and checked "Never ask again".
             ActivityCompat.requestPermissions(this,
-                arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
-                REQUEST_PERMISSIONS_REQUEST_CODE)
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                REQUEST_PERMISSIONS_REQUEST_CODE
+            )
         }
     }
 
@@ -764,13 +791,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             object: BroadcastReceiver() {
                 override fun onReceive(context: Context, intent:Intent) {
                     //Toast.makeText(applicationContext, "Broadcast receiver works.", Toast.LENGTH_LONG).show()
-                    val latitude = intent.getStringExtra(LocationMonitoringService.EXTRA_LATITUDE)
-                    val longitude = intent.getStringExtra(LocationMonitoringService.EXTRA_LONGITUDE)
-
-                    if (latitude != null && longitude != null)
-                    {
-                        //mMsgView!!.text = getString(R.string.msg_location_service_started) + "\n Latitude : " + latitude + "\n Longitude: " + longitude
-                    }
+//                    val latitude = intent.getStringExtra(LocationMonitoringService.EXTRA_LATITUDE)
+//                    val longitude = intent.getStringExtra(LocationMonitoringService.EXTRA_LONGITUDE)
+//
+//                    if (latitude != null && longitude != null)
+//                    {
+//                        //mMsgView!!.text = getString(R.string.msg_location_service_started) + "\n Latitude : " + latitude + "\n Longitude: " + longitude
+//                    }
                 }
             }, IntentFilter(LocationMonitoringService.ACTION_LOCATION_BROADCAST)
         )
@@ -786,31 +813,46 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         updateButtons()
         showMarkerInLostPosition()
 
-        val lastTrackedLocation = locations[locations.count() - 1]
+        val lastTrackedLocation =
+            if (locations.count() > 0) locations[locations.count() - 1]
+            else lastLocation
         endLatLng = LatLng(lastTrackedLocation.latitude, lastTrackedLocation.longitude)
         endTimeStamp = lastTrackedLocation.time
-        lostTimeStamp = FindBoardService.getLostBoardTimeStamp()
+        lostTimeStamp =
+            FindBoardService.getLostBoardTimeStamp()
 
         showMarkerInEndPosition()
     }
 
-    fun showMarkerInEndPosition() {
-        val markerOptions = MarkerOptions().position(endLatLng)
-            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA))
-            .title("Reported")
-        map.addMarker(markerOptions)
+    private fun showMarkerInEndPosition() {
+        if (SHOW_END_POSITION) {
+            val markerOptions = MarkerOptions().position(endLatLng)
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA))
+                .title("Reported")
+            map.addMarker(markerOptions)
+        }
     }
 
-    fun showMarkerInLostPosition()
+    private fun showMarkerInLostPosition()
     {
         displayMarker(lostLatLng)
     }
 
     fun foundClicked (view: View) {
-
+        appState = "fnd"
+        updateButtons()
     }
 
-    fun alertDialog(title: String, message: String) {
+    fun restartClicked (view: View) {
+        val intent = Intent(baseContext, this::class.java)
+        val pendingIntentId = 101
+        val pendingIntent = PendingIntent.getActivity(this, pendingIntentId,intent, PendingIntent.FLAG_CANCEL_CURRENT)
+        val alarmManager = (this.getSystemService(Context.ALARM_SERVICE)) as AlarmManager
+        alarmManager.set(AlarmManager.RTC, System.currentTimeMillis() + 100, pendingIntent)
+        exitProcess(0)
+    }
+
+    private fun alertDialog(title: String, message: String) {
         // build alert dialog
         val dialogBuilder = AlertDialog.Builder(this)
 
@@ -837,14 +879,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     fun helpClicked (view: View) {
         when (appState) {
-            "bst" -> alertDialog("", "Click START when starting your activity. The app will keep track of your movement.")
-            "run" -> alertDialog("", "Click FINISH when you are done with the activity. The app will stop keeping track of your movement.")
-            "stp" -> alertDialog("", "Use the colored track to speculate where you lost your board." +
-                    " Pan the map such that this point will be in the center of the target, then click MARK." +
-                    " Make sure to do it while still in the water with your kite!")
-            "mrk" -> alertDialog("", "The estimated location of where you lost your board is marked in red." +
-                    " The estimated current location of your board is marked in orange. When you find it, please" +
-                    " click FOUND HERE such that the app can improve its locating algorithm. Thank you!")
+            "bst" -> alertDialog("How to start?", "Click START when starting your activity. The app will keep track of your movement.")
+            "run" -> alertDialog("When landing your kite", "Click STOP when you land your kite. The app will stop keeping track of your movement.")
+            "stp" -> alertDialog("Mark lost position", "Use the colored track to speculate where you lost your board." +
+                    " Pan the map such that this point will be in the center of the target, then click MARK.")
+            "mrk" -> alertDialog("Report when found", "The estimated location of where you lost your board is marked in red." +
+                    " The estimated current location of your board is marked in orange. When you find it," +
+                    " click FOUND such that the app can improve its locating algorithm. Thank you!")
+            "fnd" -> alertDialog("Restart", "Click RESTART to restart the app.")
         }
     }
 }

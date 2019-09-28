@@ -1,11 +1,12 @@
-package com.example.org.boardfinder
+package com.example.org.boardfinder.Services
 
 import android.location.Location
-import com.example.org.boardfinder.LocationMonitoringService.Companion.locations
-import com.example.org.boardfinder.MapsActivity.Companion.endLatLng
-import com.example.org.boardfinder.MapsActivity.Companion.endTimeStamp
-import com.example.org.boardfinder.MapsActivity.Companion.lostLatLng
-import com.example.org.boardfinder.MapsActivity.Companion.lostTimeStamp
+import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.locations
+import com.example.org.boardfinder.Controller.MapsActivity.Companion.endLatLng
+import com.example.org.boardfinder.Controller.MapsActivity.Companion.endTimeStamp
+import com.example.org.boardfinder.Controller.MapsActivity.Companion.lostLatLng
+import com.example.org.boardfinder.Controller.MapsActivity.Companion.lostTimeStamp
+import com.example.org.boardfinder.Utilities.BOARD_TO_KITE_DRIFT_RATIO
 import com.google.android.gms.maps.model.LatLng
 
 object FindBoardService {

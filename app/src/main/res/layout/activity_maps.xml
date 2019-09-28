@@ -5,7 +5,7 @@
           android:layout_width="match_parent"
           android:layout_height="match_parent"
           android:id="@+id/map"
-          tools:context=".MapsActivity"
+          tools:context=".Controller.MapsActivity"
           android:name="com.google.android.gms.maps.SupportMapFragment">
 
     <TextView
@@ -54,11 +54,23 @@
             android:id="@+id/btn_report_found"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom|left"
+            android:layout_gravity="bottom|start"
             android:layout_margin="10dp"
             android:enabled="false"
             android:onClick="foundClicked"
             android:text="@string/found"
+            android:textSize="15sp"
+            android:visibility="invisible" />
+
+    <Button
+            android:id="@+id/btn_restart_app"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="10dp"
+            android:enabled="false"
+            android:onClick="restartClicked"
+            android:text="@string/restart"
             android:textSize="15sp"
             android:visibility="invisible" />
 

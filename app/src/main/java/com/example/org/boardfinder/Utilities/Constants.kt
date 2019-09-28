@@ -1,6 +1,7 @@
-package com.example.org.boardfinder
+package com.example.org.boardfinder.Utilities
 
-const val MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 4356578
+const val SHOW_END_POSITION = false
+
 const val COLOR_LIGHT_GREEN_ARGB = 0xff18f075
 const val COLOR_GREEN_ARGB = 0xff13b057
 const val COLOR_DARK_GREEN_ARGB = 0xff0c7038
