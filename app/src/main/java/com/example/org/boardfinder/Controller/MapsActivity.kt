@@ -500,7 +500,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         // Do this in case it was not done in the onResume because the map was not ready yet
         if (appState != "bst") showTrack(false)
-        if (appState == "mrk" && lostLatLng.latitude != 32.0 && lostLatLng.longitude != 35.0) {
+        if ((appState == "mrk" || appState == "fnd") && lostLatLng.latitude != 32.0 && lostLatLng.longitude != 35.0) {
             showMarkerInLostPosition()
             showMarkerInEndPosition()
         }
