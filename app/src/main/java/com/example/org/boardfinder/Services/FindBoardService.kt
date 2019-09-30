@@ -30,7 +30,7 @@ object FindBoardService {
     fun getLostBoardTimeStamp(): Long {
         var minimumDistance = 40000.0F
         var lostTimeStamp = 0L
-        for (i in 0 until locations.count() - 1) {
+        for (i in 0 until locations.count()) {
             val results = FloatArray(3)
             val calcDistance = Location.distanceBetween(lostLatLng.latitude, lostLatLng.longitude,
                 locations[i].latitude, locations[i].longitude, results)

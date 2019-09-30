@@ -22,10 +22,10 @@ import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.org.boardfinder.Controller.MapsActivity
 import com.example.org.boardfinder.Controller.MapsActivity.Companion.appState
+import com.example.org.boardfinder.Controller.MapsActivity.Companion.mapsActivityRunning
 import com.example.org.boardfinder.R
-import com.example.org.boardfinder.Utilities.FASTEST_LOCATION_INTERVAL
-import com.example.org.boardfinder.Utilities.LOCATION_INTERVAL
-import com.example.org.boardfinder.Utilities.ONGOING_NOTIFICATION_ID
+import com.example.org.boardfinder.Services.TrackFilter.trackFilter
+import com.example.org.boardfinder.Utilities.*
 
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.api.GoogleApiClient
@@ -34,6 +34,7 @@ import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.maps.model.LatLng
 import java.sql.Timestamp
 
 //import com.puertosoft.eder.locationtrackerkotlin.R
@@ -45,6 +46,9 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
     internal var mLocationRequest = LocationRequest()
     internal var mLastLocation: Location? = null
     internal lateinit  var mFusedLocationClient: FusedLocationProviderClient
+
+    var totalRemoved = 0
+    var startIndexDilution = 0
 
     internal var mLocationCallback: LocationCallback = object : LocationCallback() {
         override fun onLocationResult(locationResult: LocationResult) {
@@ -59,10 +63,17 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                     Log.d(TAG, "== location != null")
 
                     //Send result to activities
-                    sendMessageToUI(mLastLocation!!.latitude.toString(), mLastLocation!!.longitude.toString())
+                    sendMessageToUI(mLastLocation!!)
 
                     if (appState == "run") {
                         locations.add(mLastLocation!!)
+                        if (!mapsActivityRunning && locations.count() >= MIN_SAMPLES_DILUTION &&
+                            (locations.count() - startIndexDilution) % DILUTION_FREQUENCY == 0) {
+                            println("\n dilution count before was ${locations.count()}")
+                            dilution(startIndexDilution, locations.count() - 1)
+                            startIndexDilution = locations.count() - 2
+                            println("dilution count after is ${locations.count()} totalRemoved = $totalRemoved")
+                        }
                         timeStamps.add(Timestamp(System.currentTimeMillis()).toString())
                         //if (locations.count() == 20) mLocationRequest.setFastestInterval(5000)
                     }
@@ -104,7 +115,6 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
 
         //notification.setLatestEventInfo(this, getText(R.string.notification_title), getText(R.string.notification_message), pendingIntent)
         startForeground(ONGOING_NOTIFICATION_ID, notification)
-        serviceStartTime = System.currentTimeMillis()
     }
 
     override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
@@ -170,19 +180,72 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
         Log.d(TAG, "Connection suspended")
     }
 
-    private fun sendMessageToUI(lat: String, lng: String) {
+    private fun sendMessageToUI(location: Location) {
 
-        Log.d(TAG, "Sending info... lat=$lat long=$lng")
+        Log.d(TAG, "Sending info... lat=${location.latitude} long=${location.longitude} speed=${location.speed} time=${location.time}")
 
         val intent = Intent(ACTION_LOCATION_BROADCAST)
-        intent.putExtra(EXTRA_LATITUDE, lat)
-        intent.putExtra(EXTRA_LONGITUDE, lng)
+        intent.putExtra(EXTRA_LOCATION, location)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
     override fun onConnectionFailed(connectionResult: ConnectionResult) {
         Log.d(TAG, "Failed to connect to Google API")
+    }
 
+    private fun dilution(fromIndex: Int, toIndex: Int) {
+        val numberRemoved = trackFilter(fromIndex, toIndex)
+        totalRemoved += numberRemoved
+//        do {
+//            var dilutionIndices = mutableListOf<Int>()
+//
+//            println("dilution locations.count = ${locations.count()}")
+//            for (i in 0 until locations.count() - 2) {
+//                //println("dilution checking $i")
+//                if (isRedundant(i)) {
+//                    println("dilution $i is redundant ")
+//                    dilutionIndices.add(i + 1)
+//                }
+//            }
+//            for (i in 0 until dilutionIndices.count()) {
+//                var index = dilutionIndices[i] - i
+//                //println("dilution remove index = $index")
+//                locations.removeAt(index)
+//                totalRemoved++
+//                //println("dilution removed point $index")
+//            }
+//            println("dilution removed ${dilutionIndices.count()}")
+//        } while (dilutionIndices.count() > 0)
+    }
+
+    private fun isRedundant(index: Int): Boolean {
+        val results0 = FloatArray(3)
+        val results1 = FloatArray(3)
+        Location.distanceBetween(locations[index].latitude, locations[index].longitude,
+            locations[index + 1].latitude, locations[index + 1].longitude, results0)
+        Location.distanceBetween(locations[index].latitude, locations[index].longitude,
+            locations[index + 2].latitude, locations[index + 2].longitude, results1)
+        val speed1 = results0[0] / (locations[index + 1 ].time - locations[index].time) * 1000.0
+        println("speed = $speed1 ${locations[index].speed} ${locations[index+1].speed}")
+
+        val isVeryClose = results0[0] <= MIN_DISTANCE_BETWEEN_LOCATIONS
+        if (isVeryClose) return true
+
+        val bearing0 = results0[1]
+        val bearing1 = results1[1]
+        val isBearingSame = bearing0 != 0f && bearing1 != 0f && Math.abs(bearing0 - bearing1) < MAX_BEARING_DIFFERENCE
+        var redundant = false
+        if (isBearingSame) {
+            val speed0 = locations[index].speed
+            val speed1 = locations[index + 1].speed
+            val speed2 = locations[index + 2].speed
+            val mapsActivity = MapsActivity()
+            val color0 = mapsActivity.getLineColor(speed0)
+            val color1 = mapsActivity.getLineColor(speed1)
+            val color2 = mapsActivity.getLineColor(speed2)
+            redundant = color0 == color1 && color0 == color2
+        }
+        return redundant
     }
 
     companion object {
@@ -190,11 +253,11 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
         private val TAG = LocationMonitoringService::class.java!!.getSimpleName()
 
         val ACTION_LOCATION_BROADCAST = LocationMonitoringService::class.java!!.getName() + "LocationBroadcast"
-        val EXTRA_LATITUDE = "extra_latitude"
-        val EXTRA_LONGITUDE = "extra_longitude"
+        val EXTRA_LOCATION = "extra_location"
 
         var locations = mutableListOf<Location>()
         var timeStamps = mutableListOf<String>()
-        var serviceStartTime = System.currentTimeMillis()
+
+        var zoomLevel = 12f
     }
 }

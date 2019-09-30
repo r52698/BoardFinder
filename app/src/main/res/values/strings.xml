@@ -19,4 +19,5 @@
     <string name="mark">Mark</string>
     <string name="found">Found</string>
     <string name="restart">Restart</string>
+    <string name="quit">Quit</string>
 </resources>

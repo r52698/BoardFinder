@@ -74,6 +74,18 @@
             android:textSize="15sp"
             android:visibility="invisible" />
 
+    <Button
+            android:id="@+id/btn_quit_app"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="10dp"
+            android:enabled="true"
+            android:onClick="quitClicked"
+            android:text="@string/quit"
+            android:textSize="15sp"
+            android:visibility="invisible" />
+
     <ImageView
             android:id="@+id/targetImageView"
             android:layout_width="60dp"
