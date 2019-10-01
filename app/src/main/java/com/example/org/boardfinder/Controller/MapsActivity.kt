@@ -434,9 +434,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             COLOR_DARK_RED_ARGB,
             COLOR_MAGENTA_ARGB
         )
-        var i = speeds.count() - 2
-        while (i>=0 && speed < speeds[i]) i--
-        return colors[i + 1]
+        val x = speeds.binarySearch(speed.toInt())
+//        var i = speeds.count() - 2
+//        while (i>=0 && speed < speeds[i]) i--
+//        if (x > -1) println("x=$x, i=$i")
+//        return colors[i + 1]
+        return colors[x + 1]
     }
 
     private fun work() {
