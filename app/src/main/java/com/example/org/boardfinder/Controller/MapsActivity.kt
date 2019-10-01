@@ -22,7 +22,7 @@ import com.example.org.boardfinder.Services.FindBoardService
 import com.example.org.boardfinder.Services.LocationMonitoringService
 import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.locations
 import com.example.org.boardfinder.R
-import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.zoomLevel
+//import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.zoomLevel
 import com.example.org.boardfinder.Utilities.*
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
@@ -44,10 +44,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var lastLocation: Location
 
-    private lateinit var locationCallback: LocationCallback
-
-    private lateinit var locationRequest: LocationRequest
-    private var locationUpdateState = false
+//    private lateinit var locationCallback: LocationCallback
+//
+//    private lateinit var locationRequest: LocationRequest
+//    private var locationUpdateState = false
 
     private var mAlreadyStartedService = false
     private var mMsgView: TextView? = null
@@ -101,8 +101,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         var mapsActivityRunning = false
 
         var firstTime = true
-        var firstMark = true
-        lateinit var marker: Marker
+        lateinit var currentBoardLocationMarker: Marker
+        lateinit var lostPositionMarker: Marker
     }
 
     override fun onSaveInstanceState(outState: Bundle?) {
@@ -117,8 +117,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         outState?.putDouble(EXTRA_END_LNG, endLatLng.longitude)
         outState?.putDouble(EXTRA_CURRENT_LAT, lastCurrentBoardLatLng.latitude)
         outState?.putDouble(EXTRA_CURRENT_LNG, lastCurrentBoardLatLng.longitude)
-        if (mapReady) zoomLevel = map.cameraPosition.zoom
-        outState?.putFloat(EXTRA_ZOOM_LEVEL, zoomLevel)
+        if (mapReady) PrefUtil.setZoomLevel(applicationContext, map.cameraPosition.zoom)
+        outState?.putFloat(EXTRA_ZOOM_LEVEL, PrefUtil.getZoomLevel(applicationContext))
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle?) {
@@ -133,7 +133,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 savedInstanceState.getDouble(EXTRA_END_LNG))
             lastCurrentBoardLatLng = LatLng(savedInstanceState.getDouble(EXTRA_CURRENT_LAT),
                 savedInstanceState.getDouble(EXTRA_CURRENT_LNG))
-            zoomLevel = savedInstanceState.getFloat(EXTRA_ZOOM_LEVEL)
+            PrefUtil.setZoomLevel(applicationContext, savedInstanceState.getFloat(EXTRA_ZOOM_LEVEL))
             //createLocationRequest()
         }
     }
@@ -158,6 +158,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 btn_mark_cul.isEnabled = true
                 btn_report_found.isEnabled = false
                 targetImageView.visibility = View.VISIBLE
+                btn_remark.visibility = View.INVISIBLE
             }
             "mrk" ->{
                 btn_start_tracking.isEnabled = false
@@ -167,6 +168,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 btn_report_found.visibility = View.VISIBLE
                 btn_start_tracking.visibility = View.INVISIBLE
                 targetImageView.visibility = View.INVISIBLE
+                btn_remark.visibility = View.VISIBLE
+                btn_stop_tracking.visibility = View.INVISIBLE
             }
             "fnd" ->{
                 btn_start_tracking.isEnabled = false
@@ -178,6 +181,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 btn_quit_app.visibility = View.VISIBLE
                 btn_report_found.visibility = View.INVISIBLE
                 btn_restart_app.isEnabled = true
+                btn_remark.visibility = View.INVISIBLE
             }
         }
     }
@@ -286,19 +290,24 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     fun showResults(time: Double) {
-        val timeHours = time / 3600.0
-        var timeString = ""
-        if (timeHours >= 1) timeString += timeHours.toInt().toString() + ":"
-        val timeMinutesString = ((time.toInt() % 3600) / 60).toString()
-        if (timeMinutesString.length == 1 && timeString.isNotEmpty()) timeString += "0"
-        timeString += "$timeMinutesString:"
-        val secondsString = (time.toInt() % 60).toString()
-        if (secondsString.length == 1) timeString += "0"
-        timeString += secondsString
+        val timeString = getTimeString(time)
         if (time > 0) averageSpeed = (distance / time * 3.6).toString()
         if (averageSpeed.length > 4) averageSpeed = averageSpeed.substring(0, 4)
         println("distance1 = $distance")
         mMsgView!!.text = "${distance.toInt()}m  ${averageSpeed}km/h $timeString"
+    }
+
+    private fun getTimeString(timeSeconds: Double) : String {
+        val timeHours = timeSeconds / 3600.0
+        var timeString = ""
+        if (timeHours >= 1) timeString += timeHours.toInt().toString() + ":"
+        val timeMinutesString = ((timeSeconds.toInt() % 3600) / 60).toString()
+        if (timeMinutesString.length == 1 && timeString.isNotEmpty()) timeString += "0"
+        timeString += "$timeMinutesString:"
+        val secondsString = (timeSeconds.toInt() % 60).toString()
+        if (secondsString.length == 1) timeString += "0"
+        timeString += secondsString
+        return timeString
     }
 
     private fun returnDateString(isoString: String) : String {
@@ -394,11 +403,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
-    private fun displayMarker(latLng: LatLng) {
-        val markerOptions = MarkerOptions().position(latLng).title("Lost")
-        map.addMarker(markerOptions)
-    }
-
     private fun placeMarkerOnMap(fromLocation: LatLng, toLocation: LatLng, speed: Float) {
 //        // 1
 //        val markerOptions = MarkerOptions().position(location)
@@ -452,8 +456,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 //                    val lon = currentLatLng.longitude
                     //val cameraPosition = CameraPosition.Builder().target(currentLatLng).zoom(zoomLevel).build()
                     //map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
-                    map.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, zoomLevel))
-                    println("zoomLevel in mapReady = $zoomLevel")
+                    map.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, PrefUtil.getZoomLevel(applicationContext)))
+                    println("zoomLevel in mapReady = ${PrefUtil.getZoomLevel(applicationContext)}")
                     //Toast.makeText(this, "lat: $lat, lon: $lon", Toast.LENGTH_LONG).show()
                 //} else {
                     //Toast.makeText(this, "location is null", Toast.LENGTH_LONG).show()
@@ -520,6 +524,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         if ((appState == "mrk" || appState == "fnd") && lostLatLng.latitude != 32.0 && lostLatLng.longitude != 35.0) {
             showMarkerInLostPosition()
             showMarkerInEndPosition()
+            showMarkerInCurrentBoardPosition()
         }
 
         // Add polylines to the map.
@@ -789,8 +794,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         //stopService(Intent(this, LocationMonitoringService::class.java))
         //mAlreadyStartedService = false
         //Ends................................................
-        zoomLevel = map.cameraPosition.zoom
-        println("zoomLevel=$zoomLevel")
+        if (mapReady) PrefUtil.setZoomLevel(applicationContext, map.cameraPosition.zoom)
+        println("zoomLevel=${PrefUtil.getZoomLevel(applicationContext)}")
         super.onDestroy()
     }
 
@@ -832,53 +837,36 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         if (!firstTime) prevLocation = lastLocation
 
                         else if (mapReady) map.animateCamera(CameraUpdateFactory.newLatLngZoom
-                            (LatLng(prevLocation.latitude, prevLocation.longitude), zoomLevel))
+                            (LatLng(prevLocation.latitude, prevLocation.longitude), PrefUtil.getZoomLevel(applicationContext)))
                         firstTime = false
                         lastLocation = location
 
-                        if (appState == "run") {
+                        if (mapReady) {
+                            if (appState == "run") {
 
-                            if (!showingTrack) {
-                                showingTrack = true
-                                distance += prevLocation.distanceTo(lastLocation)
+                                if (!showingTrack) {
+                                    showingTrack = true
+                                    distance += prevLocation.distanceTo(lastLocation)
 
-                                val elapsedTimeSeconds = (System.currentTimeMillis() - PrefUtil.getStartTime(applicationContext)) / 1000.0
-                                showResults(elapsedTimeSeconds)
-
-                                //if (elapsedTimeSeconds > 20 && locationRequest.fastestInterval != 5000L) locationRequest.fastestInterval = 5000L
-
-                                placeMarkerOnMap(
-                                    LatLng(prevLocation.latitude, prevLocation.longitude),
-                                    LatLng(lastLocation.latitude, lastLocation.longitude),
-                                    lastLocation.speed
-                                )
-                                showingTrack = false
-                            }
-                            map.animateCamera(
-                                CameraUpdateFactory.newLatLng(
-                                    LatLng(
-                                        lastLocation.latitude,
-                                        lastLocation.longitude
+                                    val elapsedTimeSeconds = (System.currentTimeMillis() - PrefUtil.getStartTime(applicationContext)) / 1000.0
+                                    showResults(elapsedTimeSeconds)
+                                    placeMarkerOnMap(
+                                        LatLng(prevLocation.latitude, prevLocation.longitude),
+                                        LatLng(lastLocation.latitude, lastLocation.longitude),
+                                        lastLocation.speed
                                     )
-                                )
-                            )
-//                    val markerOptions = MarkerOptions().position(LatLng(lastLocation.latitude, lastLocation.longitude))
-//                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
-//                        .title(lastLocation.accuracy.toString())
-//                    map.addMarker(markerOptions)
-                        }
-                        else if (appState == "mrk") {
-                            println("displaying marker for current position lat=${lastCurrentBoardLatLng.latitude} lng=${lastCurrentBoardLatLng.longitude}")
-                            if (!firstMark) {
-                                marker.remove()
+                                    showingTrack = false
+                                }
+                                map.animateCamera(CameraUpdateFactory.newLatLng(LatLng(lastLocation.latitude, lastLocation.longitude)))
+                            } else if (appState == "mrk") {
+                                val timeString = getTimeString((System.currentTimeMillis() - lostTimeStamp) / 1000.0)
+                                currentBoardLocationMarker.snippet = timeString
+                                println("timeString=$timeString")
+                                lastCurrentBoardLatLng = FindBoardService.getCurrentBoardPosition()
+                                currentBoardLocationMarker.position = lastCurrentBoardLatLng
+                                println("displaying marker for current position lat=${lastCurrentBoardLatLng.latitude} lng=${lastCurrentBoardLatLng.longitude}"+
+                                " visibility=${currentBoardLocationMarker.isVisible}")
                             }
-                            firstMark = false
-                            lastCurrentBoardLatLng =
-                                FindBoardService.getCurrentBoardPosition()
-                            val markerOptions = MarkerOptions().position(lastCurrentBoardLatLng)
-                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
-                                .title("Look here")
-                            marker = map.addMarker(markerOptions)
                         }
                     }
                 }
@@ -889,8 +877,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     fun markClicked (view: View) {
         lostLatLng = map.getProjection().getVisibleRegion().latLngBounds.getCenter()
-        appState = "mrk"
-        updateButtons()
         showMarkerInLostPosition()
 
         val lastTrackedLocation =
@@ -898,10 +884,30 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             else lastLocation
         endLatLng = LatLng(lastTrackedLocation.latitude, lastTrackedLocation.longitude)
         endTimeStamp = lastTrackedLocation.time
-        lostTimeStamp =
-            FindBoardService.getLostBoardTimeStamp()
-
+        lostTimeStamp = FindBoardService.getLostBoardTimeStamp()
         showMarkerInEndPosition()
+        lastCurrentBoardLatLng = FindBoardService.getCurrentBoardPosition()
+        showMarkerInCurrentBoardPosition()
+        appState = "mrk"
+        updateButtons()
+    }
+
+    fun remarkClicked (view: View) {
+        lostPositionMarker.remove()
+        currentBoardLocationMarker.remove()
+        appState = "stp"
+        updateButtons()
+    }
+
+    private fun showMarkerInCurrentBoardPosition() {
+        val timeString = getTimeString((System.currentTimeMillis() - lostTimeStamp) / 1000.0)
+        val markerOptions = MarkerOptions().position(lastCurrentBoardLatLng)
+            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
+            .title("Look here")
+            .snippet(timeString)
+        currentBoardLocationMarker = map.addMarker(markerOptions)
+        //currentBoardLocationMarker.showInfoWindow()
+        println("placed marker in ${lastCurrentBoardLatLng.latitude}, ${lastCurrentBoardLatLng.longitude}")
     }
 
     private fun showMarkerInEndPosition() {
@@ -915,7 +921,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private fun showMarkerInLostPosition()
     {
-        displayMarker(lostLatLng)
+        val markerOptions = MarkerOptions().position(lostLatLng).title("Lost")
+        lostPositionMarker = map.addMarker(markerOptions)
     }
 
     fun foundClicked (view: View) {
@@ -925,6 +932,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     fun restartClicked (view: View) {
         stopService()
+        showResults(0.0)
         val intent = Intent(baseContext, this::class.java)
         val pendingIntentId = 101
         val pendingIntent = PendingIntent.getActivity(this, pendingIntentId,intent, PendingIntent.FLAG_CANCEL_CURRENT)
@@ -935,6 +943,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     fun quitClicked (view: View) {
         appState = "bst"
+        distance = 0.0
+        locations.clear()
         stopService()
         this.finish()
     }

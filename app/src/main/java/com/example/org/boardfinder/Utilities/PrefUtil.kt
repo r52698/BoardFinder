@@ -18,5 +18,18 @@ class PrefUtil {
             editor.putLong(START_TIME, value)
             editor.apply()
         }
+
+        private const val ZOOM_LEVEL = "com.example.org.boardfinder.zoom_level"
+
+        fun getZoomLevel(context: Context): Float {
+            val preferences = PreferenceManager.getDefaultSharedPreferences(context)
+            return preferences.getFloat(ZOOM_LEVEL, 12f)
+        }
+
+        fun setZoomLevel(context: Context, value: Float) {
+            val editor = PreferenceManager.getDefaultSharedPreferences(context).edit()
+            editor.putFloat(ZOOM_LEVEL, value)
+            editor.apply()
+        }
     }
 }

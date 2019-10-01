@@ -72,6 +72,7 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                             println("\n dilution count before was ${locations.count()}")
                             dilution(startIndexDilution, locations.count() - 1)
                             startIndexDilution = locations.count() - 2
+                            if (startIndexDilution < 0) startIndexDilution = 0
                             println("dilution count after is ${locations.count()} totalRemoved = $totalRemoved")
                         }
                         timeStamps.add(Timestamp(System.currentTimeMillis()).toString())
@@ -108,8 +109,8 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Board Finder")
-            .setContentText("Tracking your current position")
-            .setSmallIcon(R.drawable.ic_launcher_background)
+            .setContentText("Helping you find your board")
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
             .build()
 
@@ -218,35 +219,35 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
 //        } while (dilutionIndices.count() > 0)
     }
 
-    private fun isRedundant(index: Int): Boolean {
-        val results0 = FloatArray(3)
-        val results1 = FloatArray(3)
-        Location.distanceBetween(locations[index].latitude, locations[index].longitude,
-            locations[index + 1].latitude, locations[index + 1].longitude, results0)
-        Location.distanceBetween(locations[index].latitude, locations[index].longitude,
-            locations[index + 2].latitude, locations[index + 2].longitude, results1)
-        val speed1 = results0[0] / (locations[index + 1 ].time - locations[index].time) * 1000.0
-        println("speed = $speed1 ${locations[index].speed} ${locations[index+1].speed}")
-
-        val isVeryClose = results0[0] <= MIN_DISTANCE_BETWEEN_LOCATIONS
-        if (isVeryClose) return true
-
-        val bearing0 = results0[1]
-        val bearing1 = results1[1]
-        val isBearingSame = bearing0 != 0f && bearing1 != 0f && Math.abs(bearing0 - bearing1) < MAX_BEARING_DIFFERENCE
-        var redundant = false
-        if (isBearingSame) {
-            val speed0 = locations[index].speed
-            val speed1 = locations[index + 1].speed
-            val speed2 = locations[index + 2].speed
-            val mapsActivity = MapsActivity()
-            val color0 = mapsActivity.getLineColor(speed0)
-            val color1 = mapsActivity.getLineColor(speed1)
-            val color2 = mapsActivity.getLineColor(speed2)
-            redundant = color0 == color1 && color0 == color2
-        }
-        return redundant
-    }
+//    private fun isRedundant(index: Int): Boolean {
+//        val results0 = FloatArray(3)
+//        val results1 = FloatArray(3)
+//        Location.distanceBetween(locations[index].latitude, locations[index].longitude,
+//            locations[index + 1].latitude, locations[index + 1].longitude, results0)
+//        Location.distanceBetween(locations[index].latitude, locations[index].longitude,
+//            locations[index + 2].latitude, locations[index + 2].longitude, results1)
+//        val speed1 = results0[0] / (locations[index + 1 ].time - locations[index].time) * 1000.0
+//        println("speed = $speed1 ${locations[index].speed} ${locations[index+1].speed}")
+//
+//        val isVeryClose = results0[0] <= MIN_DISTANCE_BETWEEN_LOCATIONS
+//        if (isVeryClose) return true
+//
+//        val bearing0 = results0[1]
+//        val bearing1 = results1[1]
+//        val isBearingSame = bearing0 != 0f && bearing1 != 0f && Math.abs(bearing0 - bearing1) < MAX_BEARING_DIFFERENCE
+//        var redundant = false
+//        if (isBearingSame) {
+//            val speed0 = locations[index].speed
+//            val speed1 = locations[index + 1].speed
+//            val speed2 = locations[index + 2].speed
+//            val mapsActivity = MapsActivity()
+//            val color0 = mapsActivity.getLineColor(speed0)
+//            val color1 = mapsActivity.getLineColor(speed1)
+//            val color2 = mapsActivity.getLineColor(speed2)
+//            redundant = color0 == color1 && color0 == color2
+//        }
+//        return redundant
+//    }
 
     companion object {
 
@@ -258,6 +259,6 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
         var locations = mutableListOf<Location>()
         var timeStamps = mutableListOf<String>()
 
-        var zoomLevel = 12f
+        //var zoomLevel = 12f
     }
 }

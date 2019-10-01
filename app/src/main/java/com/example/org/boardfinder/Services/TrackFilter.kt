@@ -37,7 +37,7 @@ object TrackFilter {
         return Math.sqrt(a * a + b * b + c * c)
     }
 
-    fun RamerDouglasPeucker(pointList: List<Point>, epsilon: Double, out: MutableList<Point>) {
+    fun RamerDouglasPeucker(pointList: List<Point>, epsilon: Double, out: MutableList<Point>): Int {
         if (pointList.size < 2) throw IllegalArgumentException("Not enough points to simplify")
 
         var dilutionIndices = mutableListOf<Int>()
@@ -52,6 +52,7 @@ object TrackFilter {
         }
 
         // If max distance is greater than epsilon, recursively simplify
+        println("dilution max = $dmax")
         if (dmax > epsilon) {
             val recResults1 = mutableListOf<Point>()
             val recResults2 = mutableListOf<Point>()
@@ -71,6 +72,7 @@ object TrackFilter {
             out.add(pointList.first())
             out.add(pointList.last())
         }
+        return pointList.count() - out.count()
     }
 
     fun removeVeryClosePoints(startIndex: Int, endIndex: Int) : Int {
@@ -108,7 +110,7 @@ object TrackFilter {
                 points2Indices[point] = i
             }
             val pointListOut = mutableListOf<Point>()
-            RamerDouglasPeucker(pointList, EPSILON, pointListOut)
+            val removedRDP = RamerDouglasPeucker(pointList, EPSILON, pointListOut)
             for (i in startIndex + 1 until newEndIndex) {
                 val j = i - numberRemoved1
                 val point = Point(
@@ -122,7 +124,9 @@ object TrackFilter {
                     numberRemoved1++
                 }
             }
+            println ("dilution Started with ${pointList.count()}, should remove $removedRDP but actually removed $numberRemoved1, ended with ${pointListOut.count()}")
         }
+
         return numberRemoved + numberRemoved1
     }
 
