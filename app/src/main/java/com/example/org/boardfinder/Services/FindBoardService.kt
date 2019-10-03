@@ -27,18 +27,18 @@ object FindBoardService {
         return LatLng(currentBoardLat, currentBoardLng)
     }
 
-    fun getLostBoardTimeStamp(): Long {
+    fun getLostBoardIndex(): Int {
         var minimumDistance = 40000.0F
-        var lostTimeStamp = 0L
+        var lostIndex = 0
         for (i in 0 until locations.count()) {
             val results = FloatArray(3)
-            val calcDistance = Location.distanceBetween(lostLatLng.latitude, lostLatLng.longitude,
+            Location.distanceBetween(lostLatLng.latitude, lostLatLng.longitude,
                 locations[i].latitude, locations[i].longitude, results)
             if (results[0] < minimumDistance) {
                 minimumDistance = results[0]
-                lostTimeStamp = locations[i].time
+                lostIndex = i
             }
         }
-        return lostTimeStamp
+        return lostIndex
     }
 }

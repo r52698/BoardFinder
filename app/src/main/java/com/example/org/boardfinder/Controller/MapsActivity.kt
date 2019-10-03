@@ -22,6 +22,8 @@ import com.example.org.boardfinder.Services.FindBoardService
 import com.example.org.boardfinder.Services.LocationMonitoringService
 import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.locations
 import com.example.org.boardfinder.R
+import com.example.org.boardfinder.Services.CommunicationService
+import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.stopIndex
 //import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.zoomLevel
 import com.example.org.boardfinder.Utilities.*
 import com.google.android.gms.common.ConnectionResult
@@ -60,6 +62,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var lastCurrentBoardLatLng = LatLng(32.0, 35.0)
 
     private var showingTrack = false
+
+    var polylines = ArrayList<Polyline>()
 
     /**
      * Return the availability of GooglePlayServices
@@ -255,6 +259,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         super.onPause()
         mapsActivityRunning = false
         //if (appState == "run") fusedLocationClient.removeLocationUpdates(locationCallback)
+        if (mapReady) PrefUtil.setZoomLevel(applicationContext, map.cameraPosition.zoom)
+        println("zoomLevel=${PrefUtil.getZoomLevel(applicationContext)}")
     }
 
     // 3
@@ -286,7 +292,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 //            val time = returnDateString(timeStamp)
 //            println("Time=$time")
 //        }
-
+        if (mapReady) {
+            map.animateCamera(CameraUpdateFactory.zoomTo(PrefUtil.getZoomLevel(applicationContext)))
+        }
     }
 
     fun showResults(time: Double) {
@@ -410,19 +418,20 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 //        map.addMarker(markerOptions)
         val speedKmh = speed * 3.6f
         //val speedToDisplay = (speedKmh * 100).toInt() / 100.0
-        map.addPolyline(
+        val polyline = map.addPolyline(
             PolylineOptions().color(getLineColor(speedKmh).toInt())
                 .clickable(true)
                 .add(LatLng(fromLocation.latitude, fromLocation.longitude),
                     LatLng(toLocation.latitude, toLocation.longitude))
         )
+        polylines.add(polyline)
         println("Placing a marker at lat ${toLocation.latitude} lon ${toLocation.longitude}")
         //Toast.makeText(this, "$speedToDisplay km/h", Toast.LENGTH_LONG).show()
     }
 
     fun getLineColor(speed: Float) : Long {
         // speed and speeds are in km/h
-        val speeds = listOf(1, 2, 4, 7, 10, 15, 20, 30, 1000)
+        val speeds = listOf(1, 2, 4, 7, 10, 15, 20, 30, Int.MAX_VALUE)
         val colors = listOf (
             COLOR_LIGHT_GREEN_ARGB,
             COLOR_GREEN_ARGB,
@@ -553,7 +562,15 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         averageSpeed = "0.0"
         var firstLocation = true
         lateinit var previousLocation: Location
-        for (location in locations) {
+        for (polyline in polylines) {
+            polyline.remove()
+        }
+        polylines.clear()
+        val lastIndex =
+            if (stopIndex > 0) stopIndex
+            else locations.count() - 1
+        for (i in 0..lastIndex) {
+            val location = locations[i]
             if (firstLocation) previousLocation = location
             firstLocation = false
             val lat = location.latitude
@@ -798,8 +815,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         //stopService(Intent(this, LocationMonitoringService::class.java))
         //mAlreadyStartedService = false
         //Ends................................................
-        if (mapReady) PrefUtil.setZoomLevel(applicationContext, map.cameraPosition.zoom)
-        println("zoomLevel=${PrefUtil.getZoomLevel(applicationContext)}")
         super.onDestroy()
     }
 
@@ -808,6 +823,16 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         //Stop location sharing service to app server.........
 //        stopService(Intent(this, LocationMonitoringService::class.java))
 //        mAlreadyStartedService = false
+        stopIndex = locations.count() - 1
+        println("stopIndex=$stopIndex time=${locations[stopIndex].time}")
+        val lastTrackedLocation =
+            if (locations.count() > 0) locations[stopIndex]
+            else lastLocation
+        endLatLng = LatLng(lastTrackedLocation.latitude, lastTrackedLocation.longitude)
+        endTimeStamp = lastTrackedLocation.time
+        CommunicationService.endLocationMessage = "End ${lastTrackedLocation.latitude}" +
+                " ${lastTrackedLocation.longitude} ${lastTrackedLocation.time} ${lastTrackedLocation.speed}"
+        CommunicationService.transmitEndLocationMessage()
         appState = "stp"
         updateButtons()
     }
@@ -830,6 +855,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 override fun onReceive(context: Context, intent:Intent) {
                     //Toast.makeText(applicationContext, "Broadcast receiver works.", Toast.LENGTH_LONG).show()
                     val location = intent.getParcelableExtra<Location>(LocationMonitoringService.EXTRA_LOCATION)
+                    val comment = intent.getStringExtra("EXTRA_COMMENT")
+                    if (comment.isNotEmpty()) alertDialog("Error", comment)
 
                     if (location.latitude != null && location.longitude != null)
                     {
@@ -883,15 +910,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         lostLatLng = map.getProjection().getVisibleRegion().latLngBounds.getCenter()
         showMarkerInLostPosition()
 
-        val lastTrackedLocation =
-            if (locations.count() > 0) locations[locations.count() - 1]
-            else lastLocation
-        endLatLng = LatLng(lastTrackedLocation.latitude, lastTrackedLocation.longitude)
-        endTimeStamp = lastTrackedLocation.time
-        lostTimeStamp = FindBoardService.getLostBoardTimeStamp()
+        val lostIndex = FindBoardService.getLostBoardIndex()
+        lostTimeStamp = locations[lostIndex].time
         showMarkerInEndPosition()
         lastCurrentBoardLatLng = FindBoardService.getCurrentBoardPosition()
         showMarkerInCurrentBoardPosition()
+
+        CommunicationService.lostLocationMessage = "Lost ${lostLatLng.latitude} ${lostLatLng.longitude} $lostTimeStamp ${locations[lostIndex].speed}"
+        CommunicationService.transmitLostLocationMessage()
         appState = "mrk"
         updateButtons()
     }
@@ -930,11 +956,15 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     fun foundClicked (view: View) {
+        CommunicationService.foundLocationMessage = "Found ${locations.count() - 1} ${lastLocation.latitude} ${lastLocation.longitude} ${lastLocation.time} ${lastLocation.speed}"
+        CommunicationService.transmitFoundLocationMessage()
         appState = "fnd"
         updateButtons()
     }
 
     fun restartClicked (view: View) {
+        stopIndex = 0
+        appState = "bst"
         stopService()
         showResults(0.0)
         val intent = Intent(baseContext, this::class.java)
@@ -946,6 +976,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     fun quitClicked (view: View) {
+        stopIndex = 0
         appState = "bst"
         distance = 0.0
         locations.clear()
@@ -992,7 +1023,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             "mrk" -> alertDialog("Report when found", "The estimated location of where you lost your board is marked in red." +
                     " The estimated current location of your board is marked in orange. When you find it," +
                     " click FOUND such that the app can improve its locating algorithm. Thank you!")
-            "fnd" -> alertDialog("Restart", "Click RESTART to restart the app.")
+            "fnd" -> alertDialog("Restart / Quit", "Click RESTART to restart the app or QUIT to quit.")
         }
     }
 }

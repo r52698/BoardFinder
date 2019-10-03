@@ -2,6 +2,7 @@ package com.example.org.boardfinder.Services
 
 import android.location.Location
 import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.locations
+import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.stopIndex
 import com.example.org.boardfinder.Utilities.EPSILON
 import com.example.org.boardfinder.Utilities.MIN_DISTANCE_BETWEEN_LOCATIONS
 import com.example.org.boardfinder.Utilities.TIME_TO_LATLNG_FACTOR
@@ -29,6 +30,9 @@ object TrackFilter {
         val ax = pvx - pvdot * dx
         val ay = pvy - pvdot * dy
         val az = pvz - pvdot * dz
+
+        println("ax=$ax ay=$ay az=$az")
+        println("dx=$ax dy=$ay dz=$az")
 
         return hypot(ax, ay, az)
     }
@@ -82,17 +86,34 @@ object TrackFilter {
             Location.distanceBetween(
                 locations[i - totalRemoved].latitude, locations[i - totalRemoved].longitude,
                 locations[i + 1 - totalRemoved].latitude, locations[i + 1 - totalRemoved].longitude, results)
-            if (results[0] <= MIN_DISTANCE_BETWEEN_LOCATIONS) {
-                locations.removeAt(i + 1 - totalRemoved)
+            if (results[0] <= MIN_DISTANCE_BETWEEN_LOCATIONS && (stopIndex != i + 1 - totalRemoved)) {
+                val removingIndex = i + 1 - totalRemoved
+                locations.removeAt(removingIndex)
                 println("dilution very close removing ${i+1}")
+                if (stopIndex > removingIndex) stopIndex--
+                println("stopIndex=$stopIndex time=${locations[stopIndex].time}")
                 totalRemoved++
             }
         }
         return totalRemoved
     }
 
+//    fun removeUnreliablePoints(startIndex: Int, endIndex: Int) : Int {
+//        var totalRemoved = 0
+//        for (i in startIndex until endIndex ) {
+//            val acceleration = (locations[i + 1].speed - locations[i].speed) / (locations[i + 1].time - locations[i].time)
+//            val accuracy0 = locations[i].accuracy
+//            val accuracy1 = locations[i+1].accuracy
+//            if (Math.abs(acceleration) > 1E-3 || accuracy0 > 40 || accuracy1 > 40) {
+//                println("acceleration=$acceleration accuracy0=$accuracy0 accuracy1=$accuracy1 at point $i")
+//            }
+//        }
+//        return totalRemoved
+//    }
+
     fun trackFilter(startIndex: Int, endIndex: Int) : Int {
         println("dilution trackFiler startIndex = $startIndex  endIndex = $endIndex")
+//        val x = removeUnreliablePoints(startIndex, endIndex)
         val numberRemoved = removeVeryClosePoints(startIndex, endIndex)
         val newEndIndex = endIndex - numberRemoved
         println ("dilution newEndIndex = $newEndIndex  numberRemoved = $numberRemoved")
@@ -119,9 +140,13 @@ object TrackFilter {
                     timeToLatLngFactor(locations[j].time)
                 )
                 if (!pointListOut.contains(point)) {
-                    locations.removeAt(j)
-                    println("dilution RDP removing $i")
-                    numberRemoved1++
+                    if (stopIndex != j) {
+                        locations.removeAt(j)
+                        println("dilution RDP removing $i")
+                        numberRemoved1++
+                        if (stopIndex > j) stopIndex--
+                        println("stopIndex=$stopIndex time=${locations[stopIndex].time}")
+                    }
                 }
             }
             println ("dilution Started with ${pointList.count()}, should remove $removedRDP but actually removed $numberRemoved1, ended with ${pointListOut.count()}")

@@ -50,8 +50,22 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
     var totalRemoved = 0
     var startIndexDilution = 0
 
+    var comment = ""
+    var passed100 = false
+
+    var lastCommunicatedIndex = -1
+
+    var lastPacketTrasmitted = false
+
     internal var mLocationCallback: LocationCallback = object : LocationCallback() {
         override fun onLocationResult(locationResult: LocationResult) {
+            if (locations.count() > 100) passed100 = true
+            if (passed100 && locations.count() < 5) {
+                val elapsedTime = (System.currentTimeMillis() - PrefUtil.getStartTime(applicationContext)) / 1000
+                comment = "locations.count=${locations.count()} " +
+                        "at time=${System.currentTimeMillis()} after $elapsedTime seconds from START clicked."
+            }
+
             val locationList = locationResult.locations
             if (locationList.size > 0) {
                 //The last location in the list is the newest
@@ -65,7 +79,7 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                     //Send result to activities
                     sendMessageToUI(mLastLocation!!)
 
-                    if (appState == "run") {
+                    if (appState != "bst") {
                         locations.add(mLastLocation!!)
                         if (!mapsActivityRunning && locations.count() >= MIN_SAMPLES_DILUTION &&
                             (locations.count() - startIndexDilution) % DILUTION_FREQUENCY == 0) {
@@ -75,8 +89,26 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                             if (startIndexDilution < 0) startIndexDilution = 0
                             println("dilution count after is ${locations.count()} totalRemoved = $totalRemoved")
                         }
-                        timeStamps.add(Timestamp(System.currentTimeMillis()).toString())
+                        //timeStamps.add(Timestamp(System.currentTimeMillis()).toString())
                         //if (locations.count() == 20) mLocationRequest.setFastestInterval(5000)
+                        println("dilution startIndexDilution=$startIndexDilution lastCommunicatedIndex=$lastCommunicatedIndex COMMUNICATION_PACKET_SIZE=$COMMUNICATION_PACKET_SIZE")
+                        if (startIndexDilution > lastCommunicatedIndex + COMMUNICATION_PACKET_SIZE) {
+                            val messageString = CommunicationService.getMessage(lastCommunicatedIndex + 1,
+                                lastCommunicatedIndex + COMMUNICATION_PACKET_SIZE)
+                            println("dilution messageString=$messageString")
+                            //CommunicationService.locationMessages.add(messageString)
+                            CommunicationService.transmitLocationMessage(messageString)
+                            lastCommunicatedIndex += COMMUNICATION_PACKET_SIZE
+                        }
+                        if (appState == "fnd" && !lastPacketTrasmitted && lastCommunicatedIndex < locations.count() - 1) {
+                            val messageString = CommunicationService.getMessage(lastCommunicatedIndex + 1,
+                                locations.count() - 1)
+                            println("messageString=$messageString")
+                            //CommunicationService.locationMessages.add(messageString)
+                            CommunicationService.transmitLocationMessage(messageString)
+                            lastCommunicatedIndex = locations.count() - 1
+                            lastPacketTrasmitted = true
+                        }
                     }
                 }
             }
@@ -187,6 +219,7 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
 
         val intent = Intent(ACTION_LOCATION_BROADCAST)
         intent.putExtra(EXTRA_LOCATION, location)
+        intent.putExtra("EXTRA_COMMENT", comment)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
@@ -218,6 +251,7 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
 //            println("dilution removed ${dilutionIndices.count()}")
 //        } while (dilutionIndices.count() > 0)
     }
+
 
 //    private fun isRedundant(index: Int): Boolean {
 //        val results0 = FloatArray(3)
@@ -257,8 +291,10 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
         val EXTRA_LOCATION = "extra_location"
 
         var locations = mutableListOf<Location>()
-        var timeStamps = mutableListOf<String>()
+        //var timeStamps = mutableListOf<String>()
 
         //var zoomLevel = 12f
+
+        var stopIndex = 0
     }
 }
