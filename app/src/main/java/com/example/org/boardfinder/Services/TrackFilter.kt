@@ -18,7 +18,9 @@ object TrackFilter {
 
         // Normalize
         val mag = hypot(dx, dy, dz)
-        if (mag > 0.0) { dx /= mag; dy /= mag; dz /= mag }
+        if (mag > 0.0) {
+            dx /= mag; dy /= mag; dz /= mag
+        }
         val pvx = pt.first - lineStart.first
         val pvy = pt.second - lineStart.second
         val pvz = pt.third - lineStart.third
@@ -37,7 +39,7 @@ object TrackFilter {
         return hypot(ax, ay, az)
     }
 
-    fun hypot(a: Double, b: Double, c: Double) : Double {
+    fun hypot(a: Double, b: Double, c: Double): Double {
         return Math.sqrt(a * a + b * b + c * c)
     }
 
@@ -52,7 +54,9 @@ object TrackFilter {
         val end = pointList.size - 1
         for (i in 1 until end) {
             val d = perpendicularDistance(pointList[i], pointList[0], pointList[end])
-            if (d > dmax) { index = i; dmax = d }
+            if (d > dmax) {
+                index = i; dmax = d
+            }
         }
 
         // If max distance is greater than epsilon, recursively simplify
@@ -61,7 +65,7 @@ object TrackFilter {
             val recResults1 = mutableListOf<Point>()
             val recResults2 = mutableListOf<Point>()
             val firstLine = pointList.take(index + 1)
-            val lastLine  = pointList.drop(index)
+            val lastLine = pointList.drop(index)
             RamerDouglasPeucker(firstLine, epsilon, recResults1)
             RamerDouglasPeucker(lastLine, epsilon, recResults2)
 
@@ -69,8 +73,7 @@ object TrackFilter {
             out.addAll(recResults1.take(recResults1.size - 1))
             out.addAll(recResults2)
             if (out.size < 2) throw RuntimeException("Problem assembling output")
-        }
-        else {
+        } else {
             // Just return start and end points
             out.clear()
             out.add(pointList.first())
@@ -79,17 +82,21 @@ object TrackFilter {
         return pointList.count() - out.count()
     }
 
-    fun removeVeryClosePoints(startIndex: Int, endIndex: Int) : Int {
+    fun removeVeryClosePoints(startIndex: Int, endIndex: Int): Int {
         var totalRemoved = 0
-        for (i in startIndex until endIndex ) {
+        for (i in startIndex until endIndex) {
             val results = FloatArray(3)
             Location.distanceBetween(
-                locations[i - totalRemoved].latitude, locations[i - totalRemoved].longitude,
-                locations[i + 1 - totalRemoved].latitude, locations[i + 1 - totalRemoved].longitude, results)
+                locations[i - totalRemoved].latitude,
+                locations[i - totalRemoved].longitude,
+                locations[i + 1 - totalRemoved].latitude,
+                locations[i + 1 - totalRemoved].longitude,
+                results
+            )
             if (results[0] <= MIN_DISTANCE_BETWEEN_LOCATIONS && (stopIndex != i + 1 - totalRemoved)) {
                 val removingIndex = i + 1 - totalRemoved
                 locations.removeAt(removingIndex)
-                println("dilution very close removing ${i+1}")
+                println("dilution very close removing ${i + 1}")
                 if (stopIndex > removingIndex) stopIndex--
                 println("stopIndex=$stopIndex time=${locations[stopIndex].time}")
                 totalRemoved++
@@ -98,25 +105,12 @@ object TrackFilter {
         return totalRemoved
     }
 
-//    fun removeUnreliablePoints(startIndex: Int, endIndex: Int) : Int {
-//        var totalRemoved = 0
-//        for (i in startIndex until endIndex ) {
-//            val acceleration = (locations[i + 1].speed - locations[i].speed) / (locations[i + 1].time - locations[i].time)
-//            val accuracy0 = locations[i].accuracy
-//            val accuracy1 = locations[i+1].accuracy
-//            if (Math.abs(acceleration) > 1E-3 || accuracy0 > 40 || accuracy1 > 40) {
-//                println("acceleration=$acceleration accuracy0=$accuracy0 accuracy1=$accuracy1 at point $i")
-//            }
-//        }
-//        return totalRemoved
-//    }
-
-    fun trackFilter(startIndex: Int, endIndex: Int) : Int {
-        println("dilution trackFiler startIndex = $startIndex  endIndex = $endIndex")
+    fun trackFilter(startIndex: Int, endIndex: Int): Int {
+        println("dilution trackFilter startIndex = $startIndex  endIndex = $endIndex")
 //        val x = removeUnreliablePoints(startIndex, endIndex)
         val numberRemoved = removeVeryClosePoints(startIndex, endIndex)
         val newEndIndex = endIndex - numberRemoved
-        println ("dilution newEndIndex = $newEndIndex  numberRemoved = $numberRemoved")
+        println("dilution newEndIndex = $newEndIndex  numberRemoved = $numberRemoved")
         var numberRemoved1 = 0
         if (newEndIndex > startIndex) {
             val pointList = mutableListOf<Point>()
@@ -149,32 +143,13 @@ object TrackFilter {
                     }
                 }
             }
-            println ("dilution Started with ${pointList.count()}, should remove $removedRDP but actually removed $numberRemoved1, ended with ${pointListOut.count()}")
+            println("dilution Started with ${pointList.count()}, should remove $removedRDP but actually removed $numberRemoved1, ended with ${pointListOut.count()}")
         }
 
         return numberRemoved + numberRemoved1
     }
 
-    fun timeToLatLngFactor(time: Long) : Double {
+    fun timeToLatLngFactor(time: Long): Double {
         return time * TIME_TO_LATLNG_FACTOR
     }
-
-//    fun main(args: Array<String>) {
-//        val pointList = listOf(
-//            Point(0.0, 0.0, 1.0),
-//            Point(1.0, 0.1, 1.0),
-//            Point(2.0, -0.1, 1.0),
-//            Point(3.0, 5.0, 1.0),
-//            Point(4.0, 6.0, 1.0),
-//            Point(5.0, 7.0, 1.0),
-//            Point(6.0, 8.1, 1.0),
-//            Point(7.0, 9.0, 1.0),
-//            Point(8.0, 9.0, 1.0),
-//            Point(9.0, 9.0, 1.0)
-//        )
-//        val pointListOut = mutableListOf<Point>()
-//        RamerDouglasPeucker(pointList, 1.0, pointListOut)
-//        println("Points remaining after simplification:")
-//        for (p in pointListOut) println(p)
-//    }
 }

@@ -1,13 +1,11 @@
 package com.example.org.boardfinder.Controller
 
 import android.Manifest
-import android.app.Activity
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.*
 import android.content.pm.PackageManager
 import android.location.Location
-import android.location.LocationManager
 import android.net.ConnectivityManager
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -24,11 +22,9 @@ import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.
 import com.example.org.boardfinder.R
 import com.example.org.boardfinder.Services.CommunicationService
 import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.stopIndex
-//import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.zoomLevel
 import com.example.org.boardfinder.Utilities.*
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
-import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.*
 import com.google.android.gms.maps.model.*
@@ -45,11 +41,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var map: GoogleMap
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var lastLocation: Location
-
-//    private lateinit var locationCallback: LocationCallback
-//
-//    private lateinit var locationRequest: LocationRequest
-//    private var locationUpdateState = false
 
     private var mAlreadyStartedService = false
     private var mMsgView: TextView? = null
@@ -86,7 +77,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1
-        private const val REQUEST_CHECK_SETTINGS = 2
 
         private val TAG = MapsActivity::class.java.simpleName
 
@@ -96,17 +86,32 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         private const val REQUEST_PERMISSIONS_REQUEST_CODE = 34
 
         var appState = "bst"
-        // bst, run, pas, stp, mrk
+        // bst, run, pas, stp, mrk, fnd
 
         var lostLatLng = LatLng(32.0, 35.0)
-        var endLatLng = LatLng(32.0, 35.0)
+        var landLatLng = LatLng(32.0, 35.0)
         var lostTimeStamp = 0L
-        var endTimeStamp = 0L
+        var landTimeStamp = 0L
         var mapsActivityRunning = false
 
         var firstTime = true
         lateinit var currentBoardLocationMarker: Marker
         lateinit var lostPositionMarker: Marker
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_maps)
+        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
+        val mapFragment = supportFragmentManager
+            .findFragmentById(R.id.map) as SupportMapFragment
+        mapFragment.getMapAsync(this)
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
+        mMsgView = findViewById(R.id.msgView)
+        when (appState) {
+            "run" -> setUpService()
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle?) {
@@ -117,8 +122,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         )
         outState?.putDouble(EXTRA_LOST_LAT, lostLatLng.latitude)
         outState?.putDouble(EXTRA_LOST_LNG, lostLatLng.longitude)
-        outState?.putDouble(EXTRA_END_LAT, endLatLng.latitude)
-        outState?.putDouble(EXTRA_END_LNG, endLatLng.longitude)
+        outState?.putDouble(EXTRA_END_LAT, landLatLng.latitude)
+        outState?.putDouble(EXTRA_END_LNG, landLatLng.longitude)
         outState?.putDouble(EXTRA_CURRENT_LAT, lastCurrentBoardLatLng.latitude)
         outState?.putDouble(EXTRA_CURRENT_LNG, lastCurrentBoardLatLng.longitude)
         if (mapReady) PrefUtil.setZoomLevel(applicationContext, map.cameraPosition.zoom)
@@ -133,7 +138,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             updateButtons()
             lostLatLng = LatLng(savedInstanceState.getDouble(EXTRA_LOST_LAT),
                 savedInstanceState.getDouble(EXTRA_LOST_LNG))
-            endLatLng = LatLng(savedInstanceState.getDouble(EXTRA_END_LAT),
+            landLatLng = LatLng(savedInstanceState.getDouble(EXTRA_END_LAT),
                 savedInstanceState.getDouble(EXTRA_END_LNG))
             lastCurrentBoardLatLng = LatLng(savedInstanceState.getDouble(EXTRA_CURRENT_LAT),
                 savedInstanceState.getDouble(EXTRA_CURRENT_LNG))
@@ -142,128 +147,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
-    private fun updateButtons(){
-        when (appState) {
-            "bst" ->{
-                btn_start_tracking.isEnabled = true
-                btn_stop_tracking.isEnabled = false
-                btn_mark_cul.isEnabled = false
-                btn_report_found.isEnabled = false
-            }
-            "run" ->{
-                btn_start_tracking.isEnabled = false
-                btn_stop_tracking.isEnabled = true
-                btn_mark_cul.isEnabled = false
-                btn_report_found.isEnabled = false
-            }
-            "stp" ->{
-                btn_start_tracking.isEnabled = false
-                btn_stop_tracking.isEnabled = false
-                btn_mark_cul.isEnabled = true
-                btn_report_found.isEnabled = false
-                targetImageView.visibility = View.VISIBLE
-                btn_remark.visibility = View.INVISIBLE
-            }
-            "mrk" ->{
-                btn_start_tracking.isEnabled = false
-                btn_stop_tracking.isEnabled = false
-                btn_mark_cul.isEnabled = false
-                btn_report_found.isEnabled = true
-                btn_report_found.visibility = View.VISIBLE
-                btn_start_tracking.visibility = View.INVISIBLE
-                targetImageView.visibility = View.INVISIBLE
-                btn_remark.visibility = View.VISIBLE
-                btn_stop_tracking.visibility = View.INVISIBLE
-            }
-            "fnd" ->{
-                btn_start_tracking.isEnabled = false
-                btn_stop_tracking.isEnabled = false
-                btn_mark_cul.isEnabled = false
-                btn_report_found.isEnabled = false
-                btn_restart_app.visibility = View.VISIBLE
-                btn_mark_cul.visibility = View.INVISIBLE
-                btn_quit_app.visibility = View.VISIBLE
-                btn_report_found.visibility = View.INVISIBLE
-                btn_restart_app.isEnabled = true
-                btn_remark.visibility = View.INVISIBLE
-            }
-        }
-    }
-
-
-//    private fun startLocationUpdates() {
-//        //1
-//        if (ActivityCompat.checkSelfPermission(this,
-//                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-//            ActivityCompat.requestPermissions(this,
-//                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-//                LOCATION_PERMISSION_REQUEST_CODE
-//            )
-//            return
-//        }
-//        //2
-//        //fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null /* Looper */)
-//    }
-
-//    private fun createLocationRequest() {
-//        // 1
-//        locationRequest = LocationRequest()
-//        // 2
-//        locationRequest.interval = 10000
-//        // 3
-//        locationRequest.fastestInterval = 5000
-//        locationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
-//
-//        val builder = LocationSettingsRequest.Builder()
-//            .addLocationRequest(locationRequest)
-//
-//        // 4
-//        val client = LocationServices.getSettingsClient(this)
-//        val task = client.checkLocationSettings(builder.build())
-//
-//        // 5
-//        task.addOnSuccessListener {
-//            locationUpdateState = true
-//            startLocationUpdates()
-//        }
-//        task.addOnFailureListener { e ->
-//            // 6
-//            if (e is ResolvableApiException) {
-//                // Location settings are not satisfied, but this can be fixed
-//                // by showing the user a dialog.
-//                try {
-//                    // Show the dialog by calling startResolutionForResult(),
-//                    // and check the result in onActivityResult().
-//                    e.startResolutionForResult(this@MapsActivity,
-//                        REQUEST_CHECK_SETTINGS
-//                    )
-//                } catch (sendEx: IntentSender.SendIntentException) {
-//                    // Ignore the error.
-//                }
-//            }
-//        }
-//    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_CHECK_SETTINGS) {
-            if (resultCode == Activity.RESULT_OK) {
-//                locationUpdateState = true
-//                startLocationUpdates()
-            }
-        }
-    }
-
-    // 2
     override fun onPause() {
         super.onPause()
         mapsActivityRunning = false
-        //if (appState == "run") fusedLocationClient.removeLocationUpdates(locationCallback)
         if (mapReady) PrefUtil.setZoomLevel(applicationContext, map.cameraPosition.zoom)
         println("zoomLevel=${PrefUtil.getZoomLevel(applicationContext)}")
     }
 
-    // 3
     public override fun onResume() {
         super.onResume()
 
@@ -272,26 +162,15 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         updateButtons()
 
         if (appState == "run") {
-//            startLocationUpdates()
             startStep1()
         }
-//            Toast.makeText(
-//                this,
-//                "${LocationMonitoringService.locations.count()} locations",
-//                Toast.LENGTH_LONG
-//            ).show()
+
         showTrack()
         val elapsedTimeSeconds =
             if (appState == "bst") 0.0
             else (System.currentTimeMillis() - PrefUtil.getStartTime(applicationContext)) / 1000.0
         showResults(elapsedTimeSeconds)
-        //Toast.makeText(this, "Distance = $distance", Toast.LENGTH_LONG).show()
 
-//        for (timeStamp in LocationMonitoringService.timeStamps) {
-//
-//            val time = returnDateString(timeStamp)
-//            println("Time=$time")
-//        }
         if (mapReady) {
             map.animateCamera(CameraUpdateFactory.zoomTo(PrefUtil.getZoomLevel(applicationContext)))
         }
@@ -336,88 +215,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         return outDateString.format(convertedDate)
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_maps)
-        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
-        val mapFragment = supportFragmentManager
-            .findFragmentById(R.id.map) as SupportMapFragment
-        mapFragment.getMapAsync(this)
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+    private fun placePolyline(fromLocation: LatLng, toLocation: LatLng, speed: Float) {
 
-//        var firstTime = true
-//        var firstMark = true
-//        lateinit var marker: Marker
-//        locationCallback = object : LocationCallback() {
-//            override fun onLocationResult(p0: LocationResult) {
-//                super.onLocationResult(p0)
-//
-//                var prevLocation = p0.lastLocation
-//                if (!firstTime) prevLocation = lastLocation
-//                else if (mapReady) map.animateCamera(CameraUpdateFactory.newLatLngZoom
-//                    (LatLng(prevLocation.latitude, prevLocation.longitude), zoomLevel))
-//                firstTime = false
-//                lastLocation = p0.lastLocation
-//
-//                if (appState == "run") {
-//
-//                    if (!showingTrack) {
-//                        showingTrack = true
-//                        distance += prevLocation.distanceTo(lastLocation)
-//
-//                        val elapsedTimeSeconds = (System.currentTimeMillis() - PrefUtil.getStartTime(applicationContext)) / 1000.0
-//                        showResults(elapsedTimeSeconds)
-//
-//                        //if (elapsedTimeSeconds > 20 && locationRequest.fastestInterval != 5000L) locationRequest.fastestInterval = 5000L
-//
-//                        placeMarkerOnMap(
-//                            LatLng(prevLocation.latitude, prevLocation.longitude),
-//                            LatLng(lastLocation.latitude, lastLocation.longitude),
-//                            lastLocation.speed
-//                        )
-//                        showingTrack = false
-//                    }
-//                    map.animateCamera(
-//                        CameraUpdateFactory.newLatLng(
-//                            LatLng(
-//                                lastLocation.latitude,
-//                                lastLocation.longitude
-//                            )
-//                        )
-//                    )
-////                    val markerOptions = MarkerOptions().position(LatLng(lastLocation.latitude, lastLocation.longitude))
-////                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
-////                        .title(lastLocation.accuracy.toString())
-////                    map.addMarker(markerOptions)
-//                }
-//                else if (appState == "mrk") {
-//                    println("displaying marker for current position lat=${lastCurrentBoardLatLng.latitude} lng=${lastCurrentBoardLatLng.longitude}")
-//                    if (!firstMark) {
-//                        marker.remove()
-//                    }
-//                    firstMark = false
-//                    lastCurrentBoardLatLng =
-//                        FindBoardService.getCurrentBoardPosition()
-//                    val markerOptions = MarkerOptions().position(lastCurrentBoardLatLng)
-//                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
-//                        .title("Look here")
-//                    marker = map.addMarker(markerOptions)
-//                }
-//            }
-//        }
-        mMsgView = findViewById(R.id.msgView)
-        when (appState) {
-            "run" -> setUpService()
-        }
-    }
-
-    private fun placeMarkerOnMap(fromLocation: LatLng, toLocation: LatLng, speed: Float) {
-//        // 1
-//        val markerOptions = MarkerOptions().position(location)
-//        // 2
-//        map.addMarker(markerOptions)
         val speedKmh = speed * 3.6f
-        //val speedToDisplay = (speedKmh * 100).toInt() / 100.0
         val polyline = map.addPolyline(
             PolylineOptions().color(getLineColor(speedKmh).toInt())
                 .clickable(true)
@@ -425,11 +225,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     LatLng(toLocation.latitude, toLocation.longitude))
         )
         polylines.add(polyline)
-        println("Placing a marker at lat ${toLocation.latitude} lon ${toLocation.longitude}")
-        //Toast.makeText(this, "$speedToDisplay km/h", Toast.LENGTH_LONG).show()
     }
 
-    fun getLineColor(speed: Float) : Long {
+    private fun getLineColor(speed: Float) : Long {
         // speed and speeds are in km/h
         val speeds = listOf(1, 2, 4, 7, 10, 15, 20, 30, Int.MAX_VALUE)
         val colors = listOf (
@@ -444,36 +242,21 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             COLOR_MAGENTA_ARGB
         )
         var x = speeds.binarySearch(speed.toInt())
-//        var i = speeds.count() - 2
-//        while (i>=0 && speed < speeds[i]) i--
         if (x < 0) x = -x - 2
-//        println("x=$x, i=$i speed=$speed speedInt=${speed.toInt()}")
-        //return colors[i + 1]
         return colors[x + 1]
     }
 
-    private fun work() {
+    private fun showCurrentLocation() {
         if (ActivityCompat.checkSelfPermission(this,
                 Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            // 1
             map.isMyLocationEnabled = true
-
-            // 2
             fusedLocationClient.lastLocation.addOnSuccessListener(this) { location ->
                 // Got last known location. In some rare situations this can be null.
-                // 3
                 if (location != null) {
                     lastLocation = location
                     val currentLatLng = LatLng(location.latitude, location.longitude)
-//                    val lat = currentLatLng.latitude
-//                    val lon = currentLatLng.longitude
-                    //val cameraPosition = CameraPosition.Builder().target(currentLatLng).zoom(zoomLevel).build()
-                    //map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
                     map.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, PrefUtil.getZoomLevel(applicationContext)))
                     println("zoomLevel in mapReady = ${PrefUtil.getZoomLevel(applicationContext)}")
-                    //Toast.makeText(this, "lat: $lat, lon: $lon", Toast.LENGTH_LONG).show()
-                //} else {
-                    //Toast.makeText(this, "location is null", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -488,7 +271,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     // permission was granted, yay! Do the
                     // contacts-related task you need to do.
                     startStep3()
-                    work()
+                    showCurrentLocation()
                 //} else {
                     // permission denied, boo! Disable the
                     // functionality that depends on this permission.
@@ -528,7 +311,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onMapReady(googleMap: GoogleMap) {
         map = googleMap
         setUpMap()
-        work()
+        showCurrentLocation()
         mapReady = true
         //Toast.makeText(this, "Map ready", Toast.LENGTH_LONG).show()
 
@@ -536,24 +319,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         if (appState != "bst") showTrack()
         if ((appState == "mrk" || appState == "fnd") && lostLatLng.latitude != 32.0 && lostLatLng.longitude != 35.0) {
             showMarkerInLostPosition()
-            showMarkerInEndPosition()
+            showMarkerInLandPosition()
             showMarkerInCurrentBoardPosition()
         }
-
-        // Add polylines to the map.
-        // Polylines are useful to show a route or some other connection between points.
-//        val polyline1 = googleMap.addPolyline(
-//            PolylineOptions()
-//                .clickable(true)
-//                .add(
-//                    LatLng(-35.016, 143.321),
-//                    LatLng(-34.747, 145.592),
-//                    LatLng(-34.364, 147.891),
-//                    LatLng(-33.501, 150.217),
-//                    LatLng(-32.306, 149.248),
-//                    LatLng(-32.491, 147.309)
-//                )
-//        )
     }
 
     private fun showTrack() {
@@ -578,32 +346,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             val time = returnDateString(location.time.toString())
             println("Lat=$lat Lon=$lon time=$time")
 
-            if (mapReady) placeMarkerOnMap(LatLng(previousLocation.latitude, previousLocation.longitude), LatLng(lat, lon), location.speed)
+            if (mapReady) placePolyline(LatLng(previousLocation.latitude, previousLocation.longitude), LatLng(lat, lon), location.speed)
             distance += previousLocation.distanceTo(location)
             previousLocation = location
         }
         if (locations.isNotEmpty()) lastLocation = locations[locations.count() - 1]
         println("distance = $distance")
         showingTrack = false
-//        if (LocationMonitoringService.locations.count() > 5) {
-//            var txt = ""
-//            for (i in 0..5) {
-//                //val tm = returnDateString(LocationMonitoringService.locations[i].time.toString())
-//                //val tm = returnDateString(LocationMonitoringService.timeStamps[i])
-//                val tm = System.currentTimeMillis() - LocationMonitoringService.locations[i].time
-//                txt += "${LocationMonitoringService.locations[i].latitude}  ${LocationMonitoringService.locations[i].longitude}  $tm\n"
-//            }
-//            Toast.makeText(this,txt, Toast.LENGTH_LONG).show()
-//        }
     }
-
-//    private fun startLocationUpdates() {
-//        var locationRequest : LocationRequest
-//        fusedLocationClient.requestLocationUpdates(locationRequest,
-//            locationCallback,
-//            null /* Looper */)
-//    }
-
 
     /**
      * Step 1: Check Google Play services
@@ -762,77 +512,17 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         ).setAction(getString(actionStringId), listener).show()
     }
 
-    /**
-     * Callback received when a permissions request has been completed.
-     */
-//    override fun onRequestPermissionsResult(requestCode:Int, permissions:Array<String>, grantResults:IntArray) {
-//        Log.i(TAG, "onRequestPermissionResult")
-//        if (requestCode == REQUEST_PERMISSIONS_REQUEST_CODE)
-//        {
-//            if (grantResults.size <= 0)
-//            {
-//                // If img_user interaction was interrupted, the permission request is cancelled and you
-//                // receive empty arrays.
-//                Log.i(TAG, "User interaction was cancelled.")
-//            }
-//            else if (grantResults[0] == PackageManager.PERMISSION_GRANTED)
-//            {
-//                Log.i(TAG, "Permission granted, updates requested, starting location updates")
-//                startStep3()
-//            }
-//            else
-//            {
-//                // Permission denied.
-//                // Notify the img_user via a SnackBar that they have rejected a core permission for the
-//                // app, which makes the Activity useless. In a real app, core permissions would
-//                // typically be best requested during a welcome-screen flow.
-//
-//                // Additionally, it is important to remember that a permission might have been
-//                // rejected without asking the img_user for permission (device policy or "Never ask
-//                // again" prompts). Therefore, a img_user interface affordance is typically implemented
-//                // when permissions are denied. Otherwise, your app could appear unresponsive to
-//                // touches or interactions which have required permissions.
-//                showSnackbar(R.string.permission_denied_explanation,
-//                    R.string.settings, object: View.OnClickListener {
-//                        override fun onClick(view: View) {
-//                            // Build intent that displays the App settings screen.
-//                            val intent = Intent()
-//                            intent.action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-//                            val uri = Uri.fromParts("package",
-//                                BuildConfig.APPLICATION_ID, null)
-//                            intent.data = uri
-//                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-//                            startActivity(intent)
-//                        }
-//                    })
-//            }
-//        }
-//    }
-
-
-    public override fun onDestroy() {
-        //Stop location sharing service to app server.........
-        //stopService(Intent(this, LocationMonitoringService::class.java))
-        //mAlreadyStartedService = false
-        //Ends................................................
-        super.onDestroy()
-    }
-
     fun stopClicked(view: View) {
-        //Toast.makeText(this, "Finish clicked", Toast.LENGTH_LONG).show()
-        //Stop location sharing service to app server.........
-//        stopService(Intent(this, LocationMonitoringService::class.java))
-//        mAlreadyStartedService = false
         stopIndex = locations.count() - 1
         println("stopIndex=$stopIndex time=${locations[stopIndex].time}")
         val lastTrackedLocation =
             if (locations.count() > 0) locations[stopIndex]
             else lastLocation
-        endLatLng = LatLng(lastTrackedLocation.latitude, lastTrackedLocation.longitude)
-        endTimeStamp = lastTrackedLocation.time
-        CommunicationService.endLocationMessage = "End ${lastTrackedLocation.latitude}" +
+        landLatLng = LatLng(lastTrackedLocation.latitude, lastTrackedLocation.longitude)
+        landTimeStamp = lastTrackedLocation.time
+        CommunicationService.landLocationMessage = "Land ${lastTrackedLocation.latitude}" +
                 " ${lastTrackedLocation.longitude} ${lastTrackedLocation.time} ${lastTrackedLocation.speed}"
-        CommunicationService.transmitEndLocationMessage()
+        CommunicationService.transmitLandLocationMessage()
         appState = "stp"
         updateButtons()
     }
@@ -848,7 +538,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     fun setUpService() {
-        //createLocationRequest()
 
         LocalBroadcastManager.getInstance(this).registerReceiver(
             object: BroadcastReceiver() {
@@ -861,7 +550,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     if (location.latitude != null && location.longitude != null)
                     {
                         println("From service latitude=${location.latitude} longitude=${location.longitude} speed=${location.speed} time=${location.time}")
-                        //mMsgView!!.text = getString(R.string.msg_location_service_started) + "\n Latitude : " + latitude + "\n Longitude: " + longitude
 
                         var prevLocation = location
 
@@ -881,7 +569,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
                                     val elapsedTimeSeconds = (System.currentTimeMillis() - PrefUtil.getStartTime(applicationContext)) / 1000.0
                                     showResults(elapsedTimeSeconds)
-                                    placeMarkerOnMap(
+                                    placePolyline(
                                         LatLng(prevLocation.latitude, prevLocation.longitude),
                                         LatLng(lastLocation.latitude, lastLocation.longitude),
                                         lastLocation.speed
@@ -912,7 +600,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         val lostIndex = FindBoardService.getLostBoardIndex()
         lostTimeStamp = locations[lostIndex].time
-        showMarkerInEndPosition()
+        showMarkerInLandPosition()
         lastCurrentBoardLatLng = FindBoardService.getCurrentBoardPosition()
         showMarkerInCurrentBoardPosition()
 
@@ -940,9 +628,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         println("placed marker in ${lastCurrentBoardLatLng.latitude}, ${lastCurrentBoardLatLng.longitude}")
     }
 
-    private fun showMarkerInEndPosition() {
+    private fun showMarkerInLandPosition() {
         if (SHOW_END_POSITION) {
-            val markerOptions = MarkerOptions().position(endLatLng)
+            val markerOptions = MarkerOptions().position(landLatLng)
                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA))
                 .title("Reported")
             map.addMarker(markerOptions)
@@ -1012,6 +700,54 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         alert.setTitle(title)
         // show alert dialog
         alert.show()
+    }
+
+    private fun updateButtons(){
+        when (appState) {
+            "bst" ->{
+                btn_start_tracking.isEnabled = true
+                btn_stop_tracking.isEnabled = false
+                btn_mark_cul.isEnabled = false
+                btn_report_found.isEnabled = false
+            }
+            "run" ->{
+                btn_start_tracking.isEnabled = false
+                btn_stop_tracking.isEnabled = true
+                btn_mark_cul.isEnabled = false
+                btn_report_found.isEnabled = false
+            }
+            "stp" ->{
+                btn_start_tracking.isEnabled = false
+                btn_stop_tracking.isEnabled = false
+                btn_mark_cul.isEnabled = true
+                btn_report_found.isEnabled = false
+                targetImageView.visibility = View.VISIBLE
+                btn_remark.visibility = View.INVISIBLE
+            }
+            "mrk" ->{
+                btn_start_tracking.isEnabled = false
+                btn_stop_tracking.isEnabled = false
+                btn_mark_cul.isEnabled = false
+                btn_report_found.isEnabled = true
+                btn_report_found.visibility = View.VISIBLE
+                btn_start_tracking.visibility = View.INVISIBLE
+                targetImageView.visibility = View.INVISIBLE
+                btn_remark.visibility = View.VISIBLE
+                btn_stop_tracking.visibility = View.INVISIBLE
+            }
+            "fnd" ->{
+                btn_start_tracking.isEnabled = false
+                btn_stop_tracking.isEnabled = false
+                btn_mark_cul.isEnabled = false
+                btn_report_found.isEnabled = false
+                btn_restart_app.visibility = View.VISIBLE
+                btn_mark_cul.visibility = View.INVISIBLE
+                btn_quit_app.visibility = View.VISIBLE
+                btn_report_found.visibility = View.INVISIBLE
+                btn_restart_app.isEnabled = true
+                btn_remark.visibility = View.INVISIBLE
+            }
+        }
     }
 
     fun helpClicked (view: View) {

@@ -4,7 +4,7 @@ object CommunicationService {
 
     //var locationMessages = ArrayList<String>()
     var lostLocationMessage = ""
-    var endLocationMessage = ""
+    var landLocationMessage = ""
     var foundLocationMessage = ""
 
     fun getMessage(startIndex: Int, endIndex: Int) : String {
@@ -30,8 +30,8 @@ object CommunicationService {
         println("commMsg=$lostLocationMessage")
     }
 
-    fun transmitEndLocationMessage() {
-        println("commMsg=$endLocationMessage")
+    fun transmitLandLocationMessage() {
+        println("commMsg=$landLocationMessage")
     }
 
     fun transmitFoundLocationMessage() {

@@ -12,10 +12,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.Looper
-//import android.support.annotation.Nullable
-//import android.support.v4.app.ActivityCompat
-//import android.support.v4.app.NotificationCompat
-//import android.support.v4.content.LocalBroadcastManager
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -34,12 +30,6 @@ import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
-import com.google.android.gms.maps.model.LatLng
-import java.sql.Timestamp
-
-//import com.puertosoft.eder.locationtrackerkotlin.R
-//
-//import com.puertosoft.eder.locationtrackerkotlin.settings.Constants
 
 class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener{
     internal lateinit  var mLocationClient: GoogleApiClient
@@ -89,14 +79,11 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                             if (startIndexDilution < 0) startIndexDilution = 0
                             println("dilution count after is ${locations.count()} totalRemoved = $totalRemoved")
                         }
-                        //timeStamps.add(Timestamp(System.currentTimeMillis()).toString())
-                        //if (locations.count() == 20) mLocationRequest.setFastestInterval(5000)
-                        println("dilution startIndexDilution=$startIndexDilution lastCommunicatedIndex=$lastCommunicatedIndex COMMUNICATION_PACKET_SIZE=$COMMUNICATION_PACKET_SIZE")
+                        //println("dilution startIndexDilution=$startIndexDilution lastCommunicatedIndex=$lastCommunicatedIndex COMMUNICATION_PACKET_SIZE=$COMMUNICATION_PACKET_SIZE")
                         if (startIndexDilution > lastCommunicatedIndex + COMMUNICATION_PACKET_SIZE) {
                             val messageString = CommunicationService.getMessage(lastCommunicatedIndex + 1,
                                 lastCommunicatedIndex + COMMUNICATION_PACKET_SIZE)
                             println("dilution messageString=$messageString")
-                            //CommunicationService.locationMessages.add(messageString)
                             CommunicationService.transmitLocationMessage(messageString)
                             lastCommunicatedIndex += COMMUNICATION_PACKET_SIZE
                         }
@@ -104,7 +91,6 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                             val messageString = CommunicationService.getMessage(lastCommunicatedIndex + 1,
                                 locations.count() - 1)
                             println("messageString=$messageString")
-                            //CommunicationService.locationMessages.add(messageString)
                             CommunicationService.transmitLocationMessage(messageString)
                             lastCommunicatedIndex = locations.count() - 1
                             lastPacketTrasmitted = true
@@ -146,7 +132,6 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
             .setContentIntent(pendingIntent)
             .build()
 
-        //notification.setLatestEventInfo(this, getText(R.string.notification_title), getText(R.string.notification_message), pendingIntent)
         startForeground(ONGOING_NOTIFICATION_ID, notification)
     }
 
@@ -174,7 +159,7 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         //Make it stick to the notification panel so it is less prone to get cancelled by the Operating System.
-        return Service.START_STICKY
+        return START_STICKY
     }
 
     override fun onBind(intent: Intent): IBinder? {
@@ -230,70 +215,16 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
     private fun dilution(fromIndex: Int, toIndex: Int) {
         val numberRemoved = trackFilter(fromIndex, toIndex)
         totalRemoved += numberRemoved
-//        do {
-//            var dilutionIndices = mutableListOf<Int>()
-//
-//            println("dilution locations.count = ${locations.count()}")
-//            for (i in 0 until locations.count() - 2) {
-//                //println("dilution checking $i")
-//                if (isRedundant(i)) {
-//                    println("dilution $i is redundant ")
-//                    dilutionIndices.add(i + 1)
-//                }
-//            }
-//            for (i in 0 until dilutionIndices.count()) {
-//                var index = dilutionIndices[i] - i
-//                //println("dilution remove index = $index")
-//                locations.removeAt(index)
-//                totalRemoved++
-//                //println("dilution removed point $index")
-//            }
-//            println("dilution removed ${dilutionIndices.count()}")
-//        } while (dilutionIndices.count() > 0)
     }
-
-
-//    private fun isRedundant(index: Int): Boolean {
-//        val results0 = FloatArray(3)
-//        val results1 = FloatArray(3)
-//        Location.distanceBetween(locations[index].latitude, locations[index].longitude,
-//            locations[index + 1].latitude, locations[index + 1].longitude, results0)
-//        Location.distanceBetween(locations[index].latitude, locations[index].longitude,
-//            locations[index + 2].latitude, locations[index + 2].longitude, results1)
-//        val speed1 = results0[0] / (locations[index + 1 ].time - locations[index].time) * 1000.0
-//        println("speed = $speed1 ${locations[index].speed} ${locations[index+1].speed}")
-//
-//        val isVeryClose = results0[0] <= MIN_DISTANCE_BETWEEN_LOCATIONS
-//        if (isVeryClose) return true
-//
-//        val bearing0 = results0[1]
-//        val bearing1 = results1[1]
-//        val isBearingSame = bearing0 != 0f && bearing1 != 0f && Math.abs(bearing0 - bearing1) < MAX_BEARING_DIFFERENCE
-//        var redundant = false
-//        if (isBearingSame) {
-//            val speed0 = locations[index].speed
-//            val speed1 = locations[index + 1].speed
-//            val speed2 = locations[index + 2].speed
-//            val mapsActivity = MapsActivity()
-//            val color0 = mapsActivity.getLineColor(speed0)
-//            val color1 = mapsActivity.getLineColor(speed1)
-//            val color2 = mapsActivity.getLineColor(speed2)
-//            redundant = color0 == color1 && color0 == color2
-//        }
-//        return redundant
-//    }
 
     companion object {
 
-        private val TAG = LocationMonitoringService::class.java!!.getSimpleName()
+        private val TAG = LocationMonitoringService::class.java.simpleName
 
-        val ACTION_LOCATION_BROADCAST = LocationMonitoringService::class.java!!.getName() + "LocationBroadcast"
+        val ACTION_LOCATION_BROADCAST = LocationMonitoringService::class.java.name + "LocationBroadcast"
         val EXTRA_LOCATION = "extra_location"
 
         var locations = mutableListOf<Location>()
-        //var timeStamps = mutableListOf<String>()
-
-        //var zoomLevel = 12f
 
         var stopIndex = 0
     }
