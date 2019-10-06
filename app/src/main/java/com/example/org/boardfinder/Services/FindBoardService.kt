@@ -11,10 +11,10 @@ import com.google.android.gms.maps.model.LatLng
 
 object FindBoardService {
 
-    fun getCurrentBoardPosition() : LatLng {
+    fun getCurrentBoardPosition(currentTime: Long) : LatLng {
         val lost2reportedTimeMillis = landTimeStamp - lostTimeStamp
         val now2reportedRatio = 1.0 *
-            (System.currentTimeMillis() - lostTimeStamp) / lost2reportedTimeMillis
+            (currentTime - lostTimeStamp) / lost2reportedTimeMillis
         println("ratio=$now2reportedRatio")
         val currentKiteLat =
             lostLatLng.latitude + (landLatLng.latitude - lostLatLng.latitude) * now2reportedRatio

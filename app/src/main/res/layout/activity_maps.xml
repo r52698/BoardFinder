@@ -18,15 +18,25 @@
             android:text="@string/msg_location_service_not_started" />
 
     <Button
+            android:id="@+id/btn_login"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center"
+            android:layout_margin="10dp"
+            android:onClick="loginClicked"
+            android:text="@string/login"
+            android:textSize="15sp" />
+
+    <Button
             android:id="@+id/btn_start_tracking"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|start"
             android:layout_margin="10dp"
-            android:enabled="true"
             android:onClick="startClicked"
             android:text="@string/start"
-            android:textSize="15sp" />
+            android:textSize="15sp"
+            android:visibility="invisible" />
 
     <Button
             android:id="@+id/btn_stop_tracking"
@@ -34,10 +44,10 @@
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|center"
             android:layout_margin="10dp"
-            android:enabled="false"
             android:onClick="stopClicked"
             android:text="@string/finish"
-            android:textSize="15sp" />
+            android:textSize="15sp"
+            android:visibility="invisible"/>
 
     <Button
             android:id="@+id/btn_mark_cul"
@@ -45,10 +55,10 @@
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
             android:layout_margin="10dp"
-            android:enabled="false"
             android:onClick="markClicked"
             android:text="@string/mark"
-            android:textSize="15sp" />
+            android:textSize="15sp"
+            android:visibility="invisible"/>
 
     <Button
             android:id="@+id/btn_report_found"
@@ -56,7 +66,6 @@
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|start"
             android:layout_margin="10dp"
-            android:enabled="false"
             android:onClick="foundClicked"
             android:text="@string/found"
             android:textSize="15sp"
@@ -68,7 +77,6 @@
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
             android:layout_margin="10dp"
-            android:enabled="false"
             android:onClick="restartClicked"
             android:text="@string/restart"
             android:textSize="15sp"
@@ -80,7 +88,6 @@
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|start"
             android:layout_margin="10dp"
-            android:enabled="true"
             android:onClick="quitClicked"
             android:text="@string/quit"
             android:textSize="15sp"
@@ -92,7 +99,6 @@
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|center"
             android:layout_margin="10dp"
-            android:enabled="true"
             android:onClick="remarkClicked"
             android:text="@string/remark"
             android:textSize="15sp"
@@ -115,5 +121,19 @@
             android:onClick="helpClicked"
             android:src="@android:drawable/ic_menu_help"
             android:visibility="visible" />
+
+    <ListView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            android:id="@+id/channel_list"
+            android:visibility="invisible" />
+
+    <ListView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            android:id="@+id/sessions_list"
+            android:visibility="invisible" />
 
 </fragment>

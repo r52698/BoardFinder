@@ -17,6 +17,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.org.boardfinder.Controller.MapsActivity
+import com.example.org.boardfinder.Controller.MapsActivity.Companion.admin
 import com.example.org.boardfinder.Controller.MapsActivity.Companion.appState
 import com.example.org.boardfinder.Controller.MapsActivity.Companion.mapsActivityRunning
 import com.example.org.boardfinder.R
@@ -30,6 +31,7 @@ import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
+import java.sql.Timestamp
 
 class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener{
     internal lateinit  var mLocationClient: GoogleApiClient
@@ -69,7 +71,7 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                     //Send result to activities
                     sendMessageToUI(mLastLocation!!)
 
-                    if (appState != "bst") {
+                    if (!admin && appState != "bst") {
                         locations.add(mLastLocation!!)
                         if (!mapsActivityRunning && locations.count() >= MIN_SAMPLES_DILUTION &&
                             (locations.count() - startIndexDilution) % DILUTION_FREQUENCY == 0) {
@@ -79,19 +81,21 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                             if (startIndexDilution < 0) startIndexDilution = 0
                             println("dilution count after is ${locations.count()} totalRemoved = $totalRemoved")
                         }
-                        //println("dilution startIndexDilution=$startIndexDilution lastCommunicatedIndex=$lastCommunicatedIndex COMMUNICATION_PACKET_SIZE=$COMMUNICATION_PACKET_SIZE")
+                        println("dilution startIndexDilution=$startIndexDilution lastCommunicatedIndex=$lastCommunicatedIndex COMMUNICATION_PACKET_SIZE=$COMMUNICATION_PACKET_SIZE")
                         if (startIndexDilution > lastCommunicatedIndex + COMMUNICATION_PACKET_SIZE) {
                             val messageString = CommunicationService.getMessage(lastCommunicatedIndex + 1,
                                 lastCommunicatedIndex + COMMUNICATION_PACKET_SIZE)
                             println("dilution messageString=$messageString")
-                            CommunicationService.transmitLocationMessage(messageString)
+                            val timeStamp = Timestamp(PrefUtil.getStartTime(applicationContext))
+                            CommunicationService.transmitLocationMessage("$timeStamp $messageString")
                             lastCommunicatedIndex += COMMUNICATION_PACKET_SIZE
                         }
                         if (appState == "fnd" && !lastPacketTrasmitted && lastCommunicatedIndex < locations.count() - 1) {
+                            val timeStamp = Timestamp(PrefUtil.getStartTime(applicationContext))
                             val messageString = CommunicationService.getMessage(lastCommunicatedIndex + 1,
                                 locations.count() - 1)
                             println("messageString=$messageString")
-                            CommunicationService.transmitLocationMessage(messageString)
+                            CommunicationService.transmitLocationMessage("$timeStamp $messageString")
                             lastCommunicatedIndex = locations.count() - 1
                             lastPacketTrasmitted = true
                         }

@@ -1,8 +1,6 @@
 package com.example.org.boardfinder.Controller
 
 import android.Manifest
-import android.app.AlarmManager
-import android.app.PendingIntent
 import android.content.*
 import android.content.pm.PackageManager
 import android.location.Location
@@ -11,17 +9,19 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import com.example.org.boardfinder.Services.FindBoardService
-import com.example.org.boardfinder.Services.LocationMonitoringService
+import com.example.org.boardfinder.Model.Channel
+import com.example.org.boardfinder.Model.Message
 import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.locations
 import com.example.org.boardfinder.R
-import com.example.org.boardfinder.Services.CommunicationService
+import com.example.org.boardfinder.Services.*
 import com.example.org.boardfinder.Services.LocationMonitoringService.Companion.stopIndex
+import com.example.org.boardfinder.Services.MessageService.sessions
 import com.example.org.boardfinder.Utilities.*
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
@@ -30,11 +30,13 @@ import com.google.android.gms.maps.*
 import com.google.android.gms.maps.model.*
 
 import com.google.android.material.snackbar.Snackbar
+import io.socket.client.IO
+import io.socket.emitter.Emitter
 import kotlinx.android.synthetic.main.activity_maps.*
+import java.sql.Timestamp
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlin.system.exitProcess
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
@@ -55,6 +57,15 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var showingTrack = false
 
     var polylines = ArrayList<Polyline>()
+
+    var channelSelected = false
+
+    var sessionsTimestamps = ArrayList<String>()
+
+    var stopIndexFound = false
+
+    private val expirationTimestamp = Timestamp(119, 9, 6, 21, 0, 0, 0)
+
 
     /**
      * Return the availability of GooglePlayServices
@@ -90,13 +101,23 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         var lostLatLng = LatLng(32.0, 35.0)
         var landLatLng = LatLng(32.0, 35.0)
+        var foundLatLng = LatLng(32.0, 35.0)
         var lostTimeStamp = 0L
         var landTimeStamp = 0L
+        var foundTimeStamp = 0L
         var mapsActivityRunning = false
 
         var firstTime = true
         lateinit var currentBoardLocationMarker: Marker
         lateinit var lostPositionMarker: Marker
+
+        var selectedChannel : Channel? = null
+        var selectedSessionTimestamp = ""
+        val socket = IO.socket(SOCKET_URL)
+        lateinit var channelAdapter: ArrayAdapter<Channel>
+        lateinit var sessionsAdapter: ArrayAdapter<String>
+
+        var admin = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -111,6 +132,65 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mMsgView = findViewById(R.id.msgView)
         when (appState) {
             "run" -> setUpService()
+        }
+        println("Checking App.prefs.isLoggedIn=${App.prefs.isLoggedIn}")
+        if (App.prefs.isLoggedIn) {
+            AuthService.findUserByEmail(this) {}
+        } else {
+            appState = "lgn"
+        }
+        socket.connect()
+        socket.on("channelCreated", onNewChannel)
+        socket.on("messageCreated", onNewMessage)
+
+        channelAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, MessageService.channels)
+        channel_list.adapter = channelAdapter
+
+        LocalBroadcastManager.getInstance(this).registerReceiver(userDataChangeReceiver,
+            IntentFilter(BROADCAST_USER_DATA_CHANGE))
+
+        channel_list.setOnItemClickListener { _, _, i, _ ->
+            selectedChannel = MessageService.channels[i]
+            MessageService.getMessages(selectedChannel!!.id) { getMessagesSuccess ->
+                if (getMessagesSuccess) {
+                    createSessionsList()
+                    channelSelected = true
+                }
+            }
+            channel_list.visibility = View.INVISIBLE
+        }
+
+        sessions_list.setOnItemClickListener { _, _, i, _ ->
+            selectedSessionTimestamp = sessionsTimestamps[i]
+            if (selectedSessionTimestamp.equals("Back to users list")) {
+                channel_list.visibility = View.VISIBLE
+            } else {
+                MessageService.createSessions(selectedSessionTimestamp)
+                locations.clear()
+                stopIndexFound = false
+                landTimeStamp = 0L
+                println("locations.count=${locations.count()} after clear")
+                var i = 0
+                for (message in sessions) {
+                    handleMessage(message.message)
+                    i++
+                }
+                println("Total $i messages handled.")
+            }
+            sessions_list.visibility = View.INVISIBLE
+            showAll()
+        }
+    }
+
+    fun showAll() {
+        if (mapReady) map.clear()
+        println("locations.count=${locations.count()}")
+        showTrack()
+        if (mapReady && stopIndex > 0) {
+            showMarkerInLandPosition()
+            showMarkerInLostPosition()
+            showMarkerInFoundPosition()
+            showMarkerInCurrentBoardPosition()
         }
     }
 
@@ -165,7 +245,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             startStep1()
         }
 
-        showTrack()
+        if (admin) showAll() else showTrack()
         val elapsedTimeSeconds =
             if (appState == "bst") 0.0
             else (System.currentTimeMillis() - PrefUtil.getStartTime(applicationContext)) / 1000.0
@@ -174,6 +254,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         if (mapReady) {
             map.animateCamera(CameraUpdateFactory.zoomTo(PrefUtil.getZoomLevel(applicationContext)))
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(userDataChangeReceiver)
+        socket.disconnect()
     }
 
     fun showResults(time: Double) {
@@ -215,8 +301,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         return outDateString.format(convertedDate)
     }
 
-    private fun placePolyline(fromLocation: LatLng, toLocation: LatLng, speed: Float) {
-
+    private fun placePolyline(fromLocation: LatLng, toLocation: LatLng, speed: Float, thinLine: Boolean) {
+        println("placing polyline")
         val speedKmh = speed * 3.6f
         val polyline = map.addPolyline(
             PolylineOptions().color(getLineColor(speedKmh).toInt())
@@ -224,6 +310,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 .add(LatLng(fromLocation.latitude, fromLocation.longitude),
                     LatLng(toLocation.latitude, toLocation.longitude))
         )
+        if (thinLine) {
+//            val DOT = Dot()
+//            val GAP = Gap(3f)
+//            val PATTERN_POLYLINE_DOTTED = Arrays.asList(GAP, DOT)
+//            polyline.setPattern(PATTERN_POLYLINE_DOTTED)
+            polyline.width = 5f
+        }
         polylines.add(polyline)
     }
 
@@ -317,6 +410,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         // Do this in case it was not done in the onResume because the map was not ready yet
         if (appState != "bst") showTrack()
+        if (admin) showAll()
         if ((appState == "mrk" || appState == "fnd") && lostLatLng.latitude != 32.0 && lostLatLng.longitude != 35.0) {
             showMarkerInLostPosition()
             showMarkerInLandPosition()
@@ -335,22 +429,31 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
         polylines.clear()
         val lastIndex =
-            if (stopIndex > 0) stopIndex
+            if (!admin && stopIndex > 0) stopIndex
             else locations.count() - 1
-        for (i in 0..lastIndex) {
-            val location = locations[i]
-            if (firstLocation) previousLocation = location
-            firstLocation = false
-            val lat = location.latitude
-            val lon = location.longitude
-            val time = returnDateString(location.time.toString())
-            println("Lat=$lat Lon=$lon time=$time")
+        println("Showing track lastIndex=$lastIndex")
+        if (locations.isNotEmpty()) {
+            for (i in 0..lastIndex) {
+                val location = locations[i]
+                if (firstLocation) previousLocation = location
+                firstLocation = false
+                val lat = location.latitude
+                val lon = location.longitude
+                val time = returnDateString(location.time.toString())
+                println("Lat=$lat Lon=$lon time=$time")
 
-            if (mapReady) placePolyline(LatLng(previousLocation.latitude, previousLocation.longitude), LatLng(lat, lon), location.speed)
-            distance += previousLocation.distanceTo(location)
-            previousLocation = location
+                val thinLine = admin && stopIndexFound && (i > stopIndex)
+                if (mapReady) placePolyline(
+                    LatLng(
+                        previousLocation.latitude,
+                        previousLocation.longitude
+                    ), LatLng(lat, lon), location.speed, thinLine
+                )
+                distance += previousLocation.distanceTo(location)
+                previousLocation = location
+            }
+            lastLocation = locations[locations.count() - 1]
         }
-        if (locations.isNotEmpty()) lastLocation = locations[locations.count() - 1]
         println("distance = $distance")
         showingTrack = false
     }
@@ -520,7 +623,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             else lastLocation
         landLatLng = LatLng(lastTrackedLocation.latitude, lastTrackedLocation.longitude)
         landTimeStamp = lastTrackedLocation.time
-        CommunicationService.landLocationMessage = "Land ${lastTrackedLocation.latitude}" +
+        val timestamp = Timestamp(PrefUtil.getStartTime(applicationContext))
+        CommunicationService.landLocationMessage = "$timestamp Land ${lastTrackedLocation.latitude}" +
                 " ${lastTrackedLocation.longitude} ${lastTrackedLocation.time} ${lastTrackedLocation.speed}"
         CommunicationService.transmitLandLocationMessage()
         appState = "stp"
@@ -529,12 +633,17 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     fun startClicked(view: View) {
 
-        PrefUtil.setStartTime(applicationContext, System.currentTimeMillis())
+        if (System.currentTimeMillis() > expirationTimestamp.time) {
+            alertDialog("License expired!", "This app can't be used in this version. Please request the latest version.")
+        } else {
 
-        setUpService()
+            PrefUtil.setStartTime(applicationContext, System.currentTimeMillis())
 
-        appState = "run"
-        updateButtons()
+            setUpService()
+
+            appState = "run"
+            updateButtons()
+        }
     }
 
     fun setUpService() {
@@ -572,7 +681,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                                     placePolyline(
                                         LatLng(prevLocation.latitude, prevLocation.longitude),
                                         LatLng(lastLocation.latitude, lastLocation.longitude),
-                                        lastLocation.speed
+                                        lastLocation.speed, false
                                     )
                                     showingTrack = false
                                 }
@@ -581,7 +690,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                                 val timeString = getTimeString((System.currentTimeMillis() - lostTimeStamp) / 1000.0)
                                 currentBoardLocationMarker.snippet = timeString
                                 println("timeString=$timeString")
-                                lastCurrentBoardLatLng = FindBoardService.getCurrentBoardPosition()
+                                lastCurrentBoardLatLng = FindBoardService.getCurrentBoardPosition(System.currentTimeMillis())
                                 currentBoardLocationMarker.position = lastCurrentBoardLatLng
                                 println("displaying marker for current position lat=${lastCurrentBoardLatLng.latitude} lng=${lastCurrentBoardLatLng.longitude}"+
                                 " visibility=${currentBoardLocationMarker.isVisible}")
@@ -601,10 +710,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val lostIndex = FindBoardService.getLostBoardIndex()
         lostTimeStamp = locations[lostIndex].time
         showMarkerInLandPosition()
-        lastCurrentBoardLatLng = FindBoardService.getCurrentBoardPosition()
+        lastCurrentBoardLatLng = FindBoardService.getCurrentBoardPosition(System.currentTimeMillis())
         showMarkerInCurrentBoardPosition()
 
-        CommunicationService.lostLocationMessage = "Lost ${lostLatLng.latitude} ${lostLatLng.longitude} $lostTimeStamp ${locations[lostIndex].speed}"
+        val timestamp = Timestamp(PrefUtil.getStartTime(applicationContext))
+        CommunicationService.lostLocationMessage = "$timestamp Lost ${lostLatLng.latitude} ${lostLatLng.longitude} $lostTimeStamp ${locations[lostIndex].speed}"
         CommunicationService.transmitLostLocationMessage()
         appState = "mrk"
         updateButtons()
@@ -618,7 +728,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun showMarkerInCurrentBoardPosition() {
-        val timeString = getTimeString((System.currentTimeMillis() - lostTimeStamp) / 1000.0)
+        val currentTime =
+            if (admin) foundTimeStamp
+            else System.currentTimeMillis()
+        val timeString = getTimeString((currentTime - lostTimeStamp) / 1000.0)
         val markerOptions = MarkerOptions().position(lastCurrentBoardLatLng)
             .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
             .title("Look here")
@@ -629,10 +742,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun showMarkerInLandPosition() {
-        if (SHOW_END_POSITION) {
+        if (SHOW_END_POSITION || admin) {
+            val snippet =
+                if (admin) "${Timestamp(landTimeStamp)}"
+                else ""
             val markerOptions = MarkerOptions().position(landLatLng)
                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_MAGENTA))
-                .title("Reported")
+                .title("Reported").snippet(snippet)
             map.addMarker(markerOptions)
         }
     }
@@ -640,12 +756,24 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun showMarkerInLostPosition()
     {
         val markerOptions = MarkerOptions().position(lostLatLng).title("Lost")
+            .snippet("${Timestamp(lostTimeStamp)}")
+        lostPositionMarker = map.addMarker(markerOptions)
+    }
+
+    private fun showMarkerInFoundPosition()
+    {
+        val timeString = Timestamp(foundTimeStamp).toString()
+        val markerOptions = MarkerOptions().position(foundLatLng).title("Found")
+            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_YELLOW))
+            .snippet(timeString)
         lostPositionMarker = map.addMarker(markerOptions)
     }
 
     fun foundClicked (view: View) {
-        CommunicationService.foundLocationMessage = "Found ${locations.count() - 1} ${lastLocation.latitude} ${lastLocation.longitude} ${lastLocation.time} ${lastLocation.speed}"
+        val timestamp = Timestamp(PrefUtil.getStartTime(applicationContext))
+        CommunicationService.foundLocationMessage = "$timestamp Found ${locations.count() - 1} ${lastLocation.latitude} ${lastLocation.longitude} ${lastLocation.time} ${lastLocation.speed}"
         CommunicationService.transmitFoundLocationMessage()
+        stopService()
         appState = "fnd"
         updateButtons()
     }
@@ -653,23 +781,27 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     fun restartClicked (view: View) {
         stopIndex = 0
         appState = "bst"
-        stopService()
+        println("appState change coming from here 3")
+        locations.clear()
+        if (mapReady) map.clear()
         showResults(0.0)
-        val intent = Intent(baseContext, this::class.java)
-        val pendingIntentId = 101
-        val pendingIntent = PendingIntent.getActivity(this, pendingIntentId,intent, PendingIntent.FLAG_CANCEL_CURRENT)
-        val alarmManager = (this.getSystemService(Context.ALARM_SERVICE)) as AlarmManager
-        alarmManager.set(AlarmManager.RTC, System.currentTimeMillis() + 100, pendingIntent)
-        exitProcess(0)
+//        val intent = Intent(baseContext, this::class.java)
+//        val pendingIntentId = 101
+//        val pendingIntent = PendingIntent.getActivity(this, pendingIntentId,intent, PendingIntent.FLAG_CANCEL_CURRENT)
+//        val alarmManager = (this.getSystemService(Context.ALARM_SERVICE)) as AlarmManager
+//        alarmManager.set(AlarmManager.RTC, System.currentTimeMillis() + 100, pendingIntent)
+//        exitProcess(0)
+        updateButtons()
     }
 
     fun quitClicked (view: View) {
         stopIndex = 0
         appState = "bst"
+        println("appState change coming from here 2")
         distance = 0.0
         locations.clear()
-        stopService()
-        this.finish()
+        updateButtons()
+        System.exit(0)
     }
 
     fun stopService() {
@@ -703,32 +835,37 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun updateButtons(){
+        println("updateButtons appState=$appState")
         when (appState) {
+            "lgn" ->{
+                btn_login.visibility = View.VISIBLE
+                btn_start_tracking.visibility = View.INVISIBLE
+                btn_stop_tracking.visibility = View.INVISIBLE
+                btn_mark_cul.visibility = View.INVISIBLE
+                btn_quit_app.visibility = View.INVISIBLE
+                btn_restart_app.visibility = View.INVISIBLE
+            }
             "bst" ->{
-                btn_start_tracking.isEnabled = true
-                btn_stop_tracking.isEnabled = false
-                btn_mark_cul.isEnabled = false
-                btn_report_found.isEnabled = false
+                btn_start_tracking.visibility = if (admin) View.INVISIBLE else View.VISIBLE
+                btn_quit_app.visibility = View.INVISIBLE
+                btn_restart_app.visibility = View.INVISIBLE
+                btn_login.visibility = View.VISIBLE
             }
             "run" ->{
-                btn_start_tracking.isEnabled = false
-                btn_stop_tracking.isEnabled = true
-                btn_mark_cul.isEnabled = false
-                btn_report_found.isEnabled = false
+                btn_login.visibility = View.INVISIBLE
+                btn_stop_tracking.visibility = View.VISIBLE
+                btn_start_tracking.visibility = View.INVISIBLE
             }
             "stp" ->{
-                btn_start_tracking.isEnabled = false
-                btn_stop_tracking.isEnabled = false
-                btn_mark_cul.isEnabled = true
-                btn_report_found.isEnabled = false
+                btn_login.visibility = View.INVISIBLE
+                btn_stop_tracking.visibility = View.INVISIBLE
+                btn_mark_cul.visibility = View.VISIBLE
                 targetImageView.visibility = View.VISIBLE
                 btn_remark.visibility = View.INVISIBLE
+                btn_report_found.visibility = View.INVISIBLE
             }
             "mrk" ->{
-                btn_start_tracking.isEnabled = false
-                btn_stop_tracking.isEnabled = false
-                btn_mark_cul.isEnabled = false
-                btn_report_found.isEnabled = true
+                btn_mark_cul.visibility = View.INVISIBLE
                 btn_report_found.visibility = View.VISIBLE
                 btn_start_tracking.visibility = View.INVISIBLE
                 targetImageView.visibility = View.INVISIBLE
@@ -736,30 +873,207 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 btn_stop_tracking.visibility = View.INVISIBLE
             }
             "fnd" ->{
-                btn_start_tracking.isEnabled = false
-                btn_stop_tracking.isEnabled = false
-                btn_mark_cul.isEnabled = false
-                btn_report_found.isEnabled = false
                 btn_restart_app.visibility = View.VISIBLE
                 btn_mark_cul.visibility = View.INVISIBLE
                 btn_quit_app.visibility = View.VISIBLE
                 btn_report_found.visibility = View.INVISIBLE
-                btn_restart_app.isEnabled = true
                 btn_remark.visibility = View.INVISIBLE
             }
         }
     }
 
     fun helpClicked (view: View) {
-        when (appState) {
-            "bst" -> alertDialog("How to start?", "Click START when starting your activity. The app will keep track of your movement.")
-            "run" -> alertDialog("When landing your kite", "Click STOP when you land your kite. The app will stop keeping track of your movement.")
-            "stp" -> alertDialog("Mark lost position", "Use the colored track to speculate where you lost your board." +
-                    " Pan the map such that this point will be in the center of the target, then click MARK.")
-            "mrk" -> alertDialog("Report when found", "The estimated location of where you lost your board is marked in red." +
-                    " The estimated current location of your board is marked in orange. When you find it," +
-                    " click FOUND such that the app can improve its locating algorithm. Thank you!")
-            "fnd" -> alertDialog("Restart / Quit", "Click RESTART to restart the app or QUIT to quit.")
+        println("helpClicked admin=$admin appState=$appState")
+        if (admin) {
+            if (channelSelected) sessions_list.visibility = View.VISIBLE
+            else channel_list.visibility = View.VISIBLE
+        } else {
+            when (appState) {
+                "bst" -> alertDialog("How to start?", "Click START when starting your activity. The app will keep track of your movement.")
+                "run" -> alertDialog("When landing your kite", "Click STOP when you land your kite. The app will stop keeping track of your movement.")
+                "stp" -> alertDialog("Mark lost position", "Use the colored track to speculate where you lost your board." +
+                        " Pan the map such that this point will be in the center of the target, then click MARK.")
+                "mrk" -> alertDialog("Report when found", "The estimated location of where you lost your board is marked in red." +
+                        " The estimated current location of your board is marked in orange. When you find it," +
+                        " click FOUND such that the app can improve its locating algorithm. Thank you!")
+                "fnd" -> alertDialog("Restart / Quit", "Click RESTART to restart the app or QUIT to quit.")
+            }
         }
+    }
+
+    fun loginClicked(view: View) {
+        println("Login handshake loginClicked App.prefs.isLoggedIn=${App.prefs.isLoggedIn}")
+        if (App.prefs.isLoggedIn) {
+            // Logout
+            UserDataService.logout()
+            btn_login.text = "Login"
+            appState = "lgn"
+            locations.clear()
+            map.clear()
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(userDataChangeReceiver)
+            socket.disconnect()
+            updateButtons()
+            admin = false
+            stopIndex = 0
+        } else {
+            val loginIntent = Intent(this, LoginActivity::class.java)
+            startActivity(loginIntent)
+        }
+    }
+
+    private val userDataChangeReceiver = object: BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent?) {
+            // We reach here when user data has been changed, e.g. user logged in
+            println("Login handshake: The broadcast has been received in MainActivity App.prefs.isLoggedIn=${App.prefs.isLoggedIn}")
+            if (App.prefs.isLoggedIn) {
+                btn_login.text = "Logout"
+                if (appState == "lgn") appState = "bst"
+                println("appState change coming from here 1")
+                updateButtons()
+
+                MessageService.getChannels { getChannelsSuccess ->
+                    if (getChannelsSuccess) {
+                        if (MessageService.channels.count() > 0) {
+                            //selectedChannel = MessageService.channels[0]
+                            channelAdapter.notifyDataSetChanged()
+                        }
+                        val channelsNames = ArrayList<String>()
+                        for (channel in MessageService.channels) {
+                            channelsNames.add(channel.name)
+                        }
+                        println("Creating channel channelsNames.count=${channelsNames.count()}")
+                        if (channelsNames.contains(UserDataService.name)) {
+                            selectedChannel = MessageService.getChannelByName(UserDataService.name)
+                            println("Creating channel contains ${UserDataService.name}")
+                        } else {
+                            val channelName = UserDataService.name
+                            val channelDesc = UserDataService.name
+                            socket.emit("newChannel", channelName, channelDesc)
+                        }
+                    } else {
+
+                    }
+                }
+                admin = UserDataService.name == "admin^0545921611"
+            }
+        }
+    }
+
+    private val onNewChannel = Emitter.Listener { args ->
+        runOnUiThread {
+            if (App.prefs.isLoggedIn) {
+                val channelName = args[0] as String
+                val channelDescription = args[1] as String
+                val channelId = args[2] as String
+
+                val newChannel = Channel(channelName, channelDescription, channelId)
+                MessageService.channels.add(newChannel)
+                selectedChannel = newChannel
+                println("onNewChannel selectedChannel=$selectedChannel")
+//            println(newChannel.name)
+//            println(newChannel.description)
+//            println(newChannel.id)
+            }
+        }
+    }
+
+    private val onNewMessage = Emitter.Listener { args ->
+        if (App.prefs.isLoggedIn) {
+            runOnUiThread {
+                println("onNewMessage")
+                val channelId = args[2] as String
+                if (channelId == selectedChannel?.id) {
+                    val msgBody = args[0] as String
+                    val userName = args[3] as String
+                    val userAvatar = args[4] as String
+                    val userAvatarColor = args[5] as String
+                    val id = args[6] as String
+                    val timeStamp = args[7] as String
+
+                    val newMessage = Message(
+                        msgBody,
+                        userName,
+                        channelId,
+                        userAvatar,
+                        userAvatarColor,
+                        id,
+                        timeStamp
+                    )
+                    MessageService.messages.add(newMessage)
+                    println(newMessage.message)
+                    handleMessage(newMessage.message)
+                }
+            }
+        }
+    }
+
+    fun handleMessage(message: String) {
+        if (admin) {
+            println("Receiver About to decode $message")
+            val locationsListOut = mutableListOf<Location>()
+            val messageType =
+                CommunicationService.decodeMessage(message, locationsListOut)
+            println("Receiver isLocationsListMessage=$messageType locationsListOut.count()=${locationsListOut.count()}")
+            if (messageType == "Locations") {
+                for (location in locationsListOut) {
+                    locations.add(location)
+                }
+                // Check if Land message has been received before and only now its location arrived
+                if (landTimeStamp > 0 && locations[locations.count() - 1].time > landTimeStamp) {
+                    stopIndex = findStopIndex()
+                    stopIndexFound = true
+                }
+            } else if (messageType == "Land") {
+                val lastTrackedLocation = locationsListOut[0]
+                landLatLng = LatLng(lastTrackedLocation.latitude, lastTrackedLocation.longitude)
+                landTimeStamp = lastTrackedLocation.time
+                if (locations.isNotEmpty() && locations[locations.count() - 1].time > landTimeStamp) {
+                    stopIndex = findStopIndex()
+                    stopIndexFound = true
+                }
+            } else if (messageType == "Lost") {
+                val lostLocation = locationsListOut[0]
+                lostLatLng = LatLng(lostLocation.latitude, lostLocation.longitude)
+                lostTimeStamp = lostLocation.time
+            } else if (messageType == "Found") {
+                val foundLocation = locationsListOut[0]
+                foundLatLng = LatLng(foundLocation.latitude, foundLocation.longitude)
+                foundTimeStamp = foundLocation.time
+                // Calculate the estimated position where the board should have been found
+                lastCurrentBoardLatLng = FindBoardService.getCurrentBoardPosition(foundTimeStamp)
+            }
+            showAll()
+        }
+    }
+
+    fun findStopIndex(): Int {
+        val timeStamps = ArrayList<Long>()
+        for (location in locations) {
+            timeStamps.add(location.time)
+        }
+        var timeIndex = timeStamps.binarySearch(landTimeStamp)
+        if (timeIndex < 0) timeIndex = -timeIndex - 1
+        return timeIndex
+    }
+
+    fun createSessionsList() {
+        sessionsTimestamps.clear()
+        val sessionsMessages = ArrayList<String>()
+        for (message in MessageService.messages) {
+            sessionsMessages.add(message.message)
+        }
+        for (message in MessageService.messages) {
+            var sessionTimestamp = ""
+            val scanner = Scanner(message.message)
+            if (scanner.hasNext()) {
+                sessionTimestamp = scanner.next() + " " + scanner.next()
+                if (!sessionsTimestamps.contains(sessionTimestamp)) {
+                    sessionsTimestamps.add(sessionTimestamp)
+                }
+            }
+        }
+        sessionsTimestamps.add("Back to users list")
+        sessionsAdapter = ArrayAdapter(applicationContext, android.R.layout.simple_list_item_1, sessionsTimestamps)
+        sessions_list.adapter = sessionsAdapter
     }
 }

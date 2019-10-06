@@ -27,9 +27,21 @@ const val EXTRA_ZOOM_LEVEL = "EXTRA_ZOOM_LEVEL"
 const val BOARD_TO_KITE_DRIFT_RATIO = 0.7
 
 const val MIN_DISTANCE_BETWEEN_LOCATIONS = 3.0
-const val MIN_SAMPLES_DILUTION = 10
-const val DILUTION_FREQUENCY = 10
+const val MIN_SAMPLES_DILUTION = 50
+const val DILUTION_FREQUENCY = 50
 const val TIME_TO_LATLNG_FACTOR = 1E-7
 const val EPSILON = 1.5E-5
 
-const val COMMUNICATION_PACKET_SIZE = 10
+const val COMMUNICATION_PACKET_SIZE = 50
+
+const val BASE_URL = "https://chattinghere.herokuapp.com/v1/"
+const val SOCKET_URL = "https://chattinghere.herokuapp.com/"
+const val URL_REGISTER = "${BASE_URL}account/register"
+const val URL_LOGIN = "${BASE_URL}account/login"
+const val URL_CREATE_USER = "${BASE_URL}user/add"
+const val URL_GET_USER = "${BASE_URL}user/byEmail/"
+const val URL_GET_CHANNELS = "${BASE_URL}channel"
+const val URL_GET_MESSAGES = "${BASE_URL}message/byChannel/"
+
+// Boradcast constants
+const val BROADCAST_USER_DATA_CHANGE = "BROADCAST_USER_DATA_CHANGE"
