@@ -51,7 +51,7 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
 
     internal var mLocationCallback: LocationCallback = object : LocationCallback() {
         override fun onLocationResult(locationResult: LocationResult) {
-            if (locations.count() > 100) passed100 = true
+            if (locations.count() > 10000) passed100 = true
             if (passed100 && locations.count() < 5) {
                 val elapsedTime = (System.currentTimeMillis() - PrefUtil.getStartTime(applicationContext)) / 1000
                 comment = "locations.count=${locations.count()} " +
@@ -98,6 +98,7 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                             CommunicationService.transmitLocationMessage("$timeStamp $messageString")
                             lastCommunicatedIndex = locations.count() - 1
                             lastPacketTrasmitted = true
+                            comment = "Last packet transmitted"
                         }
                     }
                 }
@@ -137,6 +138,8 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
             .build()
 
         startForeground(ONGOING_NOTIFICATION_ID, notification)
+
+        passed100 = false
     }
 
     override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {

@@ -24,7 +24,7 @@ object CommunicationService {
             val dlat = ((loc1.latitude - loc0.latitude) * 1E5).toInt()
             val dlng = ((loc1.longitude - loc0.longitude) * 1E5).toInt()
             val dtime = ((loc1.time - loc0.time) * 1E-3).toInt()
-            val dspeed = ((loc1.speed - loc0.speed) * 1E4).toInt()
+            val dspeed = ((loc1.speed - loc0.speed) * 1E2).toInt()
             message += " $dlat $dlng $dtime $dspeed"
             speeds += " ${loc1.speed}"
         }
@@ -85,6 +85,9 @@ object CommunicationService {
                 var lat = scanner.nextDouble()
                 var lng = scanner.nextDouble()
                 var time = scanner.nextLong()
+                val speedFactor =
+                    if (time < 1570527567194) 1E-4f
+                    else 1E-2f
                 var speed = scanner.nextFloat()
                 location.latitude = lat
                 location.longitude = lng
@@ -97,7 +100,7 @@ object CommunicationService {
                     val dlat = scanner.nextDouble() * 1E-5
                     val dlng = scanner.nextDouble() * 1E-5
                     val dtime = scanner.nextLong() * 1000
-                    val dspeed = scanner.nextFloat() * 1E-4f
+                    val dspeed = scanner.nextFloat() * speedFactor
                     lat += dlat
                     lng += dlng
                     time += dtime

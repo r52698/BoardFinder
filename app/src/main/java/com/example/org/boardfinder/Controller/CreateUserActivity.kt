@@ -22,7 +22,7 @@ class CreateUserActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_create_user)
-        createSpinner.visibility = View.INVISIBLE
+        spinner.visibility = View.INVISIBLE
     }
 
     fun generateUserAvatar(view: View) {
@@ -61,7 +61,7 @@ class CreateUserActivity : AppCompatActivity() {
                     println("Create user completed successfully")
                     AuthService.loginUser(email, password) { loginSuccess ->
                         if (loginSuccess) {
-                            println("Login user completed successfully")
+                            println("CUR Login user completed successfully")
                             println("Token=${App.prefs.authToken}, Email=${App.prefs.userEmail}")
                             AuthService.createUser(
                                 userName,
@@ -81,14 +81,17 @@ class CreateUserActivity : AppCompatActivity() {
                                     finish()
                                 } else {
                                     errorToast()
+                                    println("CUR Create user unsuccessful")
                                 }
                             }
                         } else {
                             errorToast()
+                            println("CUR Login unsuccessful")
                         }
                     }
                 } else {
                     errorToast()
+                    println("CUR Register user unsuccessful")
                 }
             }
         } else {
@@ -107,9 +110,9 @@ class CreateUserActivity : AppCompatActivity() {
 
     fun enableSpinner(enable: Boolean) {
         if (enable) {
-            createSpinner.visibility = View.VISIBLE
+            spinner.visibility = View.VISIBLE
         } else {
-            createSpinner.visibility = View.INVISIBLE
+            spinner.visibility = View.INVISIBLE
         }
         createUserBtn.isEnabled = !enable
         backgroundColorBtn.isEnabled = !enable

@@ -133,7 +133,7 @@
             app:layout_constraintStart_toStartOf="parent" />
 
     <ProgressBar
-            android:id="@+id/createSpinner"
+            android:id="@+id/spinner"
             style="?android:attr/progressBarStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
