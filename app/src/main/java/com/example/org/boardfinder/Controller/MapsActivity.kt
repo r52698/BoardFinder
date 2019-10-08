@@ -446,6 +446,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun showTrack() {
         showingTrack = true
         distance = 0.0
+        println("Distance0 1")
         averageSpeed = "0.0"
         var firstLocation = true
         lateinit var previousLocation: Location
@@ -471,7 +472,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         previousLocation.longitude
                     ), LatLng(lat, lon), location.speed, thinLine
                 )
-                if (i <= stopIndex) distance += previousLocation.distanceTo(location)
+                if (!admin || i <= stopIndex) distance += previousLocation.distanceTo(location)
                 previousLocation = location
             }
             lastLocation = locations[locations.count() - 1]
@@ -721,7 +722,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                                     showingTrack = false
                                 }
                                 map.animateCamera(CameraUpdateFactory.newLatLng(LatLng(lastLocation.latitude, lastLocation.longitude)))
-                            } else if (appState == "mrk") {
+                            } else if (appState == "mrk" && ::currentBoardLocationMarker.isInitialized) {
                                 val timeString = getTimeString((System.currentTimeMillis() - lostTimeStamp) / 1000.0)
                                 currentBoardLocationMarker.snippet = timeString
                                 println("timeString=$timeString")
@@ -838,6 +839,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         appState = "bst"
         println("appState change coming from here 2")
         distance = 0.0
+        println("Distance0 2")
         locations.clear()
         updateButtons()
         finish()
@@ -1131,6 +1133,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         stopIndexFound = false
         landTimeStamp = 0L
         distance = 0.0
+        println("Distance0 3")
         averageSpeed = "0.0"
         stopIndex = 0
         showTextResults(0.0)
