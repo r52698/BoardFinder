@@ -14,7 +14,10 @@ object CommunicationService {
     var landLocationMessage = ""
     var foundLocationMessage = ""
 
-    fun getMessage(startIndex: Int, endIndex: Int) : String {
+    /**
+     * Generating the message to transmit for a packet of locations
+     */
+    fun getMessageToTransmit(startIndex: Int, endIndex: Int) : String {
         var loc1 = LocationMonitoringService.locations[startIndex]
         var speeds = loc1.speed.toString()
         var message = "$startIndex $endIndex ${loc1.latitude} ${loc1.longitude} ${loc1.time} ${loc1.speed}"
@@ -88,6 +91,7 @@ object CommunicationService {
                 val speedFactor =
                     if (time < 1570527567194) 1E-4f
                     else 1E-2f
+                println("decodeMessage speedFactor=$speedFactor")
                 var speed = scanner.nextFloat()
                 location.latitude = lat
                 location.longitude = lng

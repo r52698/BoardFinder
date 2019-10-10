@@ -65,8 +65,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     var sessionsTimestamps = ArrayList<String>()
 
-    var stopIndexFound = false
-
     var firstTime = true
     lateinit var currentBoardLocationMarker: Marker
     lateinit var lostPositionMarker: Marker
@@ -173,22 +171,25 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             if (selectedSessionTimestamp.equals("Back to users list")) {
                 channel_list.visibility = View.VISIBLE
             } else {
+                spinner.visibility = View.VISIBLE
                 MessageService.createSessions(selectedSessionTimestamp) // Gather all messages belong to the selected session
                 reset()
                 println("locations.count=${locations.count()} after clear")
                 var i = 0
                 for (message in sessions) {
-                    handleMessage(message.message)
+                    handleReceivedMessage(message.message)
                     i++
                 }
                 println("Total $i messages handled.")
             }
             sessions_list.visibility = View.INVISIBLE
             showAll()
+            spinner.visibility = View.INVISIBLE
         }
     }
 
     fun showAll() {
+        println("showAll stopIndex=$stopIndex")
         println("locations.count=${locations.count()}")
         clearAllMarkers()
         val lastIndex =
@@ -198,14 +199,26 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val elapsedTimeSeconds =
             if (locations.isNotEmpty()) (locations[lastIndex].time - locations[0].time) / 1000.0
             else 0.0
-        showTextResults(elapsedTimeSeconds)
         showTrack()
-        if (mapReady && stopIndex > 0) {
-            showMarkerInLandPosition()
-            showMarkerInLostPosition()
-            showMarkerInFoundPosition()
-            showMarkerInCurrentBoardPosition()
-            map.animateCamera(CameraUpdateFactory.newLatLngZoom(lostLatLng, PrefUtil.getZoomLevel(applicationContext)))
+        println("showAll elapsedTimeSeconds=$elapsedTimeSeconds")
+        showTextResults(elapsedTimeSeconds)
+        if (mapReady) {
+            if (locations.isNotEmpty()) {
+                val cameraLatLng =
+                    if (landTimeStamp > locations[0].time) landLatLng
+                    else LatLng(locations[locations.count() / 2].latitude, locations[locations.count() / 2].longitude)
+                map.animateCamera(CameraUpdateFactory.newLatLngZoom(cameraLatLng, PrefUtil.getZoomLevel(applicationContext)))
+            }
+            if (locations.isNotEmpty() && (landTimeStamp > locations[0].time)) {
+                // Show marker in land position if STOP clicked but its time stamp is later than
+                // the one of the last location, because the app was closed after STOP clickek
+                showMarkerInLandPosition()
+            }
+            if (stopIndex > 0) {
+                showMarkerInLostPosition()
+                showMarkerInFoundPosition()
+                showMarkerInCurrentBoardPosition()
+            }
         }
     }
 
@@ -225,6 +238,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         outState?.putDouble(EXTRA_FOUND_LNG, foundLatLng.longitude)
         if (mapReady) PrefUtil.setZoomLevel(applicationContext, map.cameraPosition.zoom)
         outState?.putFloat(EXTRA_ZOOM_LEVEL, PrefUtil.getZoomLevel(applicationContext))
+        outState?.putInt(EXTRA_STOP_INDEX, stopIndex)
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle?) {
@@ -243,6 +257,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 savedInstanceState.getDouble(EXTRA_FOUND_LNG))
             PrefUtil.setZoomLevel(applicationContext, savedInstanceState.getFloat(EXTRA_ZOOM_LEVEL))
             //createLocationRequest()
+            stopIndex = savedInstanceState.getInt(EXTRA_STOP_INDEX)
         }
     }
 
@@ -266,11 +281,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             startStep1()
         }
 
-        if (admin) showAll() else showTrack()
-        val elapsedTimeSeconds =
-            if (appState == "bst") 0.0
-            else (System.currentTimeMillis() - PrefUtil.getStartTime(applicationContext)) / 1000.0
-        showTextResults(elapsedTimeSeconds)
+        if (admin) showAll() else {
+            showTrack()
+            val elapsedTimeSeconds =
+                if (appState == "bst") 0.0
+                else (System.currentTimeMillis() - PrefUtil.getStartTime(applicationContext)) / 1000.0
+            showTextResults(elapsedTimeSeconds)
+        }
 
         if (mapReady) {
             map.animateCamera(CameraUpdateFactory.zoomTo(PrefUtil.getZoomLevel(applicationContext)))
@@ -286,7 +303,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     fun showTextResults(time: Double) {
         println("showTextResults time=$time")
         val timeString = getTimeString(time)
-        if (time > 0) averageSpeed = (distance / time * 3.6).toString()
+        averageSpeed =
+            if (time > 0) (distance / time * 3.6).toString()
+            else "0.0"
         if (averageSpeed.length > 4) averageSpeed = averageSpeed.substring(0, 4)
         println("distance1 = $distance")
         mMsgView!!.text = "${distance.toInt()}m  ${averageSpeed}km/h $timeString"
@@ -371,8 +390,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 if (location != null) {
                     lastLocation = location
                     println("lastLocation is $lastLocation")
-                    val currentLatLng = LatLng(location.latitude, location.longitude)
-                    map.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, PrefUtil.getZoomLevel(applicationContext)))
+                    if (!admin) {
+                        val currentLatLng = LatLng(location.latitude, location.longitude)
+                        map.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, PrefUtil.getZoomLevel(applicationContext)))
+                    }
                     println("zoomLevel in mapReady = ${PrefUtil.getZoomLevel(applicationContext)}")
                 }
             }
@@ -465,14 +486,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 val time = returnDateString(location.time.toString())
                 println("Lat=$lat Lon=$lon time=$time")
 
-                val thinLine = admin && stopIndexFound && (i > stopIndex)
+                val thinLine = admin && (stopIndex > 0) && (i > stopIndex)
                 if (mapReady) placePolyline(
                     LatLng(
                         previousLocation.latitude,
                         previousLocation.longitude
                     ), LatLng(lat, lon), location.speed, thinLine
                 )
-                if (!admin || i <= stopIndex) distance += previousLocation.distanceTo(location)
+                if (!admin || i <= stopIndex || stopIndex == 0) distance += previousLocation.distanceTo(location)
                 previousLocation = location
             }
             lastLocation = locations[locations.count() - 1]
@@ -1048,13 +1069,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     )
                     MessageService.messages.add(newMessage)
                     println(newMessage.message)
-                    handleMessage(newMessage.message)
+                    handleReceivedMessage(newMessage.message)
                 }
             }
         }
     }
 
-    fun handleMessage(message: String) {
+    fun handleReceivedMessage(message: String) {
         if (admin) {
             println("Receiver About to decode $message")
             val locationsListOut = mutableListOf<Location>()
@@ -1068,15 +1089,21 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 // Check if Land message has been received before and only now its location arrived
                 if (landTimeStamp > 0 && locations[locations.count() - 1].time > landTimeStamp) {
                     stopIndex = findStopIndex()
-                    stopIndexFound = true
+                    println("handleRecievedMessage later stopIndex=$stopIndex")
+                    println("handleRecievedMessage later locations[locations.count() - 1].time=${Timestamp(locations[locations.count() - 1].time)}")
+
                 }
             } else if (messageType == "Land") {
                 val lastTrackedLocation = locationsListOut[0]
                 landLatLng = LatLng(lastTrackedLocation.latitude, lastTrackedLocation.longitude)
                 landTimeStamp = lastTrackedLocation.time
+                println("handleRecievedMessage landTimeStamp=${Timestamp(landTimeStamp)}")
+                println("handleRecievedMessage locations.count()=${locations.count()}")
+                if (locations.isNotEmpty())
+                    println("handleRecievedMessage locations[locations.count() - 1].time=${Timestamp(locations[locations.count() - 1].time)}")
                 if (locations.isNotEmpty() && locations[locations.count() - 1].time > landTimeStamp) {
                     stopIndex = findStopIndex()
-                    stopIndexFound = true
+                    println("handleRecievedMessage stopIndex=$stopIndex")
                 }
             } else if (messageType == "Lost") {
                 val lostLocation = locationsListOut[0]
@@ -1130,7 +1157,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         clearAllPolylines()
         /** Reset variables to their initial value
          */
-        stopIndexFound = false
         landTimeStamp = 0L
         distance = 0.0
         println("Distance0 3")

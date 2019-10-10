@@ -83,7 +83,7 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                         }
                         println("dilution startIndexDilution=$startIndexDilution lastCommunicatedIndex=$lastCommunicatedIndex COMMUNICATION_PACKET_SIZE=$COMMUNICATION_PACKET_SIZE")
                         if (startIndexDilution > lastCommunicatedIndex + COMMUNICATION_PACKET_SIZE) {
-                            val messageString = CommunicationService.getMessage(lastCommunicatedIndex + 1,
+                            val messageString = CommunicationService.getMessageToTransmit(lastCommunicatedIndex + 1,
                                 lastCommunicatedIndex + COMMUNICATION_PACKET_SIZE)
                             println("dilution messageString=$messageString")
                             val timeStamp = Timestamp(PrefUtil.getStartTime(applicationContext))
@@ -92,7 +92,7 @@ class LocationMonitoringService : Service(), GoogleApiClient.ConnectionCallbacks
                         }
                         if (appState == "fnd" && !lastPacketTrasmitted && lastCommunicatedIndex < locations.count() - 1) {
                             val timeStamp = Timestamp(PrefUtil.getStartTime(applicationContext))
-                            val messageString = CommunicationService.getMessage(lastCommunicatedIndex + 1,
+                            val messageString = CommunicationService.getMessageToTransmit(lastCommunicatedIndex + 1,
                                 locations.count() - 1)
                             println("messageString=$messageString")
                             CommunicationService.transmitLocationMessage("$timeStamp $messageString")
