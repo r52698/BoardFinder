@@ -1,0 +1,22 @@
+{
+    "_id": {
+        "$oid": "5e887a4ca4aa7500281bba03"
+    },
+    "messageBody": "2020-04-04 14:59:10.84 000117 Rescue/topics/Tel-Aviv-04-04-2020 32.1176916 34.8335404 1586002506999 0.51742876",
+    "userId": {
+        "$oid": "5e400aaebe0971002894b41c"
+    },
+    "channelId": {
+        "$oid": "5e400ab5be0971002894b41d"
+    },
+    "userName": "dror^0545921611",
+    "userAvatar": "profileDefault",
+    "userAvatarColor": "[0.5, 0.5, 0.5, 1]",
+    "timeStamp": {
+        "$date": "2020-04-04T12:15:08.366Z"
+    },
+    "__v": 0
+}
+
+at 15:15:08 the rescue was sent
+at 17:45:59 the service stopped.
